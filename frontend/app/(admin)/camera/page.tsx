@@ -183,10 +183,8 @@ export default function CameraPage() {
   }
 
   useEffect(() => {
-    return () => {
-      if (intervalRef.current) clearInterval(intervalRef.current);
-      streamRef.current?.getTracks().forEach((t) => t.stop());
-    };
+    return () => stopCamera();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   return (
@@ -198,7 +196,7 @@ export default function CameraPage() {
             Live Camera
           </h1>
           <p className="text-sm mt-1" style={{ color: "var(--text-secondary)" }}>
-            Browser-based attendance gate — no Python required. Scans every 2 seconds.
+            Browser-based attendance gate. Scans every 2 seconds.
           </p>
         </div>
         <div className="flex items-center gap-3">

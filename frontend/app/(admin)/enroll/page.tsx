@@ -46,7 +46,12 @@ function EnrollContent() {
 
   useEffect(() => {
     loadStudents();
-    return () => stopCamera();
+    return () => {
+      if (streamRef.current) {
+        streamRef.current.getTracks().forEach((t) => t.stop());
+        streamRef.current = null;
+      }
+    };
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
