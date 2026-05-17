@@ -1,71 +1,62 @@
 # AttendEase
 
-> Gateway camera-based automatic attendance system for universities.
-> Students are identified via face recognition as they enter, marked present or late, and their parents are notified via SMS.
+> Browser-based automatic attendance system for university entrance gates.
+> Students are recognized by face as they walk in, marked present or late, and the admin sees it in real time — no extra hardware or software needed at the gate.
 
 ---
 
-## How It Works — Step by Step
+## How It Works
 
-1. **Admin registers a student** via the web panel (name, student ID, course, year level).
-2. **Admin opens Face Enrollment** in the browser, which requests camera permission.
-3. **Browser webcam activates** — admin captures 3–5 photos from different angles.
-4. **Photos are saved** to the server (`backend/static/faces/{student_internal_id}/`).
-5. **Face encoding is extracted** from each photo using the `face_recognition` library (HOG model).
-6. **Admin clicks "Re-train Model"** — all stored photos are re-processed and encodings averaged for better accuracy.
-7. **Camera scans the entrance** using one of two options:
-   - **Option A (recommended):** Admin opens `/camera` in any browser — the page uses the PC's webcam directly, no Python required.
-   - **Option B:** Run `camera_gateway.py` on the PC connected to the physical entrance camera.
-8. A frame is sent to `POST /api/camera/recognize` every 2 seconds. The backend detects **all faces** in the frame simultaneously.
-9. Each face is compared against all enrolled students using Euclidean distance on 128-D face encodings.
-10. **If a match is found** (confidence ≥ 0.55), attendance is recorded as "present" or "late" based on time.
-11. A mock SMS is logged: `[MOCK SMS] → +639XXXXXXX: Juan Dela Cruz has been marked present at 07:45 AM today.`
-12. **Admin dashboard** receives a real-time WebSocket update per recognized student.
-13. **Student logs into the portal** (`/portal`) to view their attendance history with monthly filters and attendance rate.
-14. **Students can send messages** to the admin via the "Contact Admin" button in the portal. Admins read them at `/messages`.
+1. **Admin registers a student** — name, student ID, course, year level.
+2. **Admin enrolls the student's face** — the browser webcam captures 3–5 photos from different angles.
+3. **Photos are uploaded** to the server and face encodings are extracted using the `face_recognition` library.
+4. **Admin clicks "Re-train Model"** — all stored photos are re-processed for better accuracy.
+5. **Admin opens the Live Camera page** (`/camera`) on the entrance PC — the browser requests camera access.
+6. **A frame is sent to the server every 2 seconds.** All faces in the frame are detected simultaneously.
+7. **Each face is matched** against enrolled students. Matches above the confidence threshold are recorded.
+8. Attendance is saved as **present** or **late** based on arrival time (default cutoff: 8:00 AM).
+9. A mock SMS is logged to the server console: `[MOCK SMS] → Juan Dela Cruz has been marked present at 07:45 AM.`
+10. **Admin dashboard** receives a real-time update via WebSocket — no page refresh needed.
+11. **Students log into the portal** (`/portal`) to view their attendance history and rate.
+12. **Students can contact admin** directly from the portal via the "Contact Admin" button.
 
 ---
 
 ## Architecture
 
 ```
-┌─────────────────────────────────────────────────────────────────┐
-│                    University Entrance Gate                      │
-│                                                                  │
-│  Option A: Admin Browser → /camera page (getUserMedia)          │
-│  Option B: camera_gateway.py (Python/OpenCV on entrance PC)     │
-│                                                                  │
-│  Captures frames every 2s, sends as base64 to API               │
-└──────────────────────────┬──────────────────────────────────────┘
+┌─────────────────────────────────────────────────────────────┐
+│                  University Entrance Gate                    │
+│                                                             │
+│   Admin opens /camera in any browser on the gate PC        │
+│   Browser captures a frame every 2 seconds (getUserMedia)  │
+└──────────────────────────┬──────────────────────────────────┘
                            │ POST /api/camera/recognize
                            ▼
-┌──────────────────────────────────────────────────────────────────┐
-│                   FastAPI Backend (Python 3.11)                   │
-│                                                                   │
-│  ┌──────────────────┐  ┌───────────────────┐  ┌──────────────┐  │
-│  │  Face Service    │  │  Attendance Svc   │  │  SMS Mock    │  │
-│  │  (multi-face)    │→ │  (mark + notify)  │→ │  (console)   │  │
-│  └──────────────────┘  └───────────────────┘  └──────────────┘  │
-│             │                   │                                 │
-│             ▼                   ▼                                 │
-│  static/faces/{id}/     NeonTech PostgreSQL                       │
-│  (local image store)    (cloud database)                          │
-│             │                   │                                 │
-│             └──────────┬────────┘                                 │
-│                        │ WebSocket /api/camera/ws/live            │
-└────────────────────────┼─────────────────────────────────────────┘
-                         │
-┌────────────────────────▼─────────────────────────────────────────┐
-│                    Next.js 14 Frontend                            │
-│                                                                   │
-│  Admin Panel                    Student Portal                    │
-│  /dashboard  (live feed)        /portal  (own attendance)         │
-│  /students   (CRUD)             /portal/login                     │
-│  /enroll     (face photos)                                        │
-│  /camera     (browser gate)                                       │
-│  /notifications                                                   │
-│  /messages   (student inbox)                                      │
-└───────────────────────────────────────────────────────────────────┘
+┌─────────────────────────────────────────────────────────────┐
+│               FastAPI Backend (Python 3.11)                 │
+│                                                             │
+│  Face Service       Attendance Service     SMS Mock         │
+│  (multi-face)  →   (mark + notify)    →   (console log)    │
+│       │                   │                                 │
+│       ▼                   ▼                                 │
+│  static/faces/      NeonTech PostgreSQL                     │
+│  (face photos)      (cloud database)                        │
+│                           │                                 │
+│              WebSocket /api/camera/ws/live                  │
+└──────────────────────────┬──────────────────────────────────┘
+                           │
+┌──────────────────────────▼──────────────────────────────────┐
+│                  Next.js 14 Frontend                        │
+│                                                             │
+│  Admin Panel                   Student Portal               │
+│  /dashboard   (live feed)      /portal        (attendance)  │
+│  /students    (manage)         /portal/login               │
+│  /enroll      (face photos)                                 │
+│  /camera      (entrance gate)                               │
+│  /notifications                                             │
+│  /messages    (student inbox)                               │
+└─────────────────────────────────────────────────────────────┘
 ```
 
 ---
@@ -75,28 +66,15 @@
 | Layer | Technology |
 |-------|-----------|
 | Backend | Python 3.11, FastAPI 0.115, SQLAlchemy (async), asyncpg |
-| Face Recognition | `face_recognition` library (dlib HOG model), multi-face per frame |
+| Face Recognition | `face_recognition` library (dlib HOG), multi-face per frame |
 | Database | PostgreSQL on NeonTech (cloud, serverless) |
 | Frontend | Next.js 14 (App Router), Tailwind CSS, TypeScript |
-| Camera — Browser | `getUserMedia` API in `/camera` admin page |
-| Camera — Python | `camera_gateway.py` (OpenCV + requests) |
+| Camera | Browser `getUserMedia` API — no Python or OpenCV at the gate |
 | Image Storage | Local filesystem (`backend/static/faces/`) |
-| Timezone | Philippine Time (UTC+8) via Python `zoneinfo` |
-| Notifications | Mock (logs to console — no real SMS service wired up) |
+| Realtime | WebSocket (`/api/camera/ws/live`) |
+| Timezone | Philippine Time (UTC+8) via `zoneinfo` |
+| Notifications | Mock SMS (console log — swap `sms_service.py` for real provider) |
 | Deployment | Vercel (frontend) + Railway (backend) |
-
----
-
-## What's New
-
-- **Browser Live Camera** (`/camera`) — replaces `camera_gateway.py` for most setups; no Python needed at the entrance PC
-- **Multi-face recognition** — detects and marks attendance for multiple students passing through simultaneously
-- **Student messaging** — "Contact Admin" floating button in the portal sends a message; admin reads at `/messages`
-- **Philippine Time** — all timestamps (attendance, logs, tokens) use UTC+8
-- **Gateway live/offline indicator** — admin dashboard shows a real-time pulse dot indicating whether the camera is actively sending frames
-- **Dev-mode clear attendance** — red "Clear (Dev)" button on the dashboard for quick testing resets
-- **Individual photo deletion** — enrolled photos can be deleted one by one from the enroll page
-- **Standardized date format** — "Month Day, Year" (e.g., "May 16, 2025") everywhere in the UI
 
 ---
 
@@ -106,187 +84,149 @@
 attendease/
 ├── backend/
 │   ├── app/
-│   │   ├── main.py                       # FastAPI entry + static file serving
+│   │   ├── main.py                        # FastAPI entry + static file serving
 │   │   ├── core/
-│   │   │   ├── config.py                 # Settings (DB URL, JWT, thresholds)
-│   │   │   ├── security.py               # JWT auth, password hashing, API key
-│   │   │   └── timezone.py               # ph_now() → PH Time (UTC+8)
+│   │   │   ├── config.py                  # Settings (DB URL, JWT, thresholds)
+│   │   │   ├── security.py                # JWT auth, password hashing, API key
+│   │   │   └── timezone.py                # ph_now() → PH Time (UTC+8)
 │   │   ├── db/
-│   │   │   ├── session.py                # Async SQLAlchemy engine + get_db
-│   │   │   └── base.py                   # Model imports for SQLAlchemy
+│   │   │   ├── session.py                 # Async SQLAlchemy engine + get_db
+│   │   │   └── base.py                    # Model imports for Alembic
 │   │   ├── models/
-│   │   │   └── models.py                 # Student, Parent, Attendance, PortalAccount, StudentMessage
+│   │   │   └── models.py                  # Student, Parent, Attendance, PortalAccount, StudentMessage
 │   │   ├── api/routes/
-│   │   │   ├── auth.py                   # Admin + student login → JWT
-│   │   │   ├── students.py               # CRUD, face enrollment, photo management
-│   │   │   ├── attendance.py             # View, override, clear attendance
-│   │   │   ├── camera.py                 # /recognize (multi-face) + WebSocket + /status
-│   │   │   ├── notifications.py          # Parent notification log
-│   │   │   └── messages.py               # Student → admin messages
+│   │   │   ├── auth.py                    # Admin + student login → JWT
+│   │   │   ├── students.py                # CRUD, face enrollment, photo management
+│   │   │   ├── attendance.py              # View, override, clear attendance
+│   │   │   ├── camera.py                  # /recognize (multi-face) + WebSocket + /status
+│   │   │   ├── notifications.py           # Parent notification log
+│   │   │   └── messages.py                # Student → admin messages
 │   │   └── services/
-│   │       ├── face_service.py           # Encoding, multi-face recognition, image save
-│   │       ├── attendance_service.py     # Mark present/late, notify parents
-│   │       └── sms_service.py            # Mock SMS (prints to console)
-│   ├── static/faces/                     # Local face photo storage (auto-created)
+│   │       ├── face_service.py            # Encoding, multi-face recognition, image save
+│   │       ├── attendance_service.py      # Mark present/late, notify parents
+│   │       └── sms_service.py             # Mock SMS (prints to console)
+│   ├── static/faces/                      # Enrolled face photos (auto-created)
 │   ├── requirements.txt
-│   ├── Procfile                          # Railway deployment start command
-│   ├── seed_admin.py                     # Seed default admin + demo student
-│   ├── .env                              # Local config (not committed)
-│   └── .env.example                      # Config template
+│   ├── Procfile                           # Railway start command
+│   ├── seed_admin.py                      # Seed default admin + demo student
+│   ├── .env.example                       # Config template
+│   └── .env                              # Local config (git-ignored)
 │
 ├── frontend/
 │   ├── app/
-│   │   ├── layout.tsx                    # Root layout
-│   │   ├── page.tsx                      # Redirects → /login
-│   │   ├── login/page.tsx                # Admin login
-│   │   ├── (admin)/                      # Admin route group (JWT-guarded)
-│   │   │   ├── layout.tsx                # Sidebar navigation
-│   │   │   ├── dashboard/page.tsx        # Live attendance + WebSocket + gateway status
-│   │   │   ├── students/page.tsx         # Student management + edit modal
-│   │   │   ├── enroll/page.tsx           # Face enrollment via webcam, photo deletion
-│   │   │   ├── camera/page.tsx           # Browser-based attendance gate (NEW)
-│   │   │   ├── notifications/page.tsx    # Parent notification log
-│   │   │   └── messages/page.tsx         # Student messages inbox (NEW)
+│   │   ├── layout.tsx                     # Root layout + favicon
+│   │   ├── page.tsx                       # Redirect → /login
+│   │   ├── login/page.tsx                 # Admin login
+│   │   ├── (admin)/
+│   │   │   ├── layout.tsx                 # Sidebar navigation
+│   │   │   ├── dashboard/page.tsx         # Live feed + WebSocket + stats
+│   │   │   ├── students/page.tsx          # Student management + edit modal
+│   │   │   ├── enroll/page.tsx            # Face enrollment via webcam
+│   │   │   ├── camera/page.tsx            # Browser entrance gate camera
+│   │   │   ├── notifications/page.tsx     # Attendance notification log
+│   │   │   └── messages/page.tsx          # Student messages inbox
 │   │   └── portal/
-│   │       ├── layout.tsx
-│   │       ├── login/page.tsx            # Student portal login
-│   │       └── page.tsx                  # Attendance view + Contact Admin CTA
-│   ├── lib/api.ts                        # API client (admin helpers)
-│   ├── .env.local                        # API URL (not committed)
-│   └── .env.example
+│   │       ├── login/page.tsx             # Student portal login
+│   │       └── page.tsx                   # Attendance view + Contact Admin
+│   ├── lib/api.ts                         # Admin API client
+│   ├── public/logo/                       # App logo files
+│   ├── .env.example                       # Config template
+│   └── .env.local                        # Local config (git-ignored)
 │
-├── camera_gateway.py                     # Alternative: Python entrance camera script
-├── schema.sql                            # PostgreSQL schema reference
-├── schema_neon.sql                       # NeonTech-specific schema (with student_messages)
+├── .gitignore
+├── USER_MANUAL.md                         # End-user guide (admin + student)
 └── README.md
 ```
 
 ---
 
-## Prerequisites
+## Local Development Setup
+
+### Prerequisites
 
 - **Python 3.11+**
-- **Node.js 20+** and **npm** (or pnpm)
-- **cmake** and C++ build tools (required to compile dlib for face recognition):
+- **Node.js 18+** and **pnpm** (`npm install -g pnpm`)
+- **cmake + C++ build tools** — required to compile dlib:
   - Ubuntu/Debian: `sudo apt install cmake build-essential libopenblas-dev`
   - macOS: `brew install cmake`
-  - Windows: Install [CMake](https://cmake.org/download/) + [Visual Studio Build Tools](https://visualstudio.microsoft.com/visual-cpp-build-tools/) with "Desktop development with C++"
-- **NeonTech account** with a PostgreSQL database
+  - Windows: [CMake](https://cmake.org/download/) + [Visual Studio Build Tools](https://visualstudio.microsoft.com/visual-cpp-build-tools/) (select "Desktop development with C++")
+- **NeonTech account** — free PostgreSQL database at https://neon.tech
 
-> **Windows tip:** `pip install face_recognition` compiles dlib from source — this takes 15–25 minutes and requires cmake + MSVC build tools. If it fails, use WSL2 (Ubuntu) instead.
+> **Windows tip:** Compiling dlib takes 15–25 minutes and needs MSVC build tools. If it keeps failing, use WSL2 (Ubuntu) instead.
 
 ---
 
-## Local Development Setup
-
-### 1. Database Schema
-
-Run the schema against your NeonTech database. Either:
+### 1. Clone
 
 ```bash
-psql "postgresql://user:pass@host/db?sslmode=require" -f schema_neon.sql
+git clone https://github.com/your-username/attendease.git
+cd attendease
 ```
 
-Or paste `schema_neon.sql` contents into the **NeonTech SQL Editor** tab.
+---
 
 ### 2. Backend
 
 ```bash
 cd backend
 
-# Create and activate virtual environment
 python -m venv venv
-venv\Scripts\activate          # Windows
-source venv/bin/activate       # macOS / Linux
+venv\Scripts\activate        # Windows
+# source venv/bin/activate   # Mac / Linux
 
-# Install dependencies (dlib compilation takes 15–25 min first time)
 pip install -r requirements.txt
 
-# Configure environment
-cp .env.example .env
-# Open .env and set DATABASE_URL to your NeonTech connection string
-
-# Seed default admin and demo student accounts
-python seed_admin.py
-
-# Start the API server
-uvicorn app.main:app --reload --port 8000
+cp .env.example .env         # Windows: copy .env.example .env
 ```
 
-API available at `http://localhost:8000`  
-Swagger docs: `http://localhost:8000/docs`
+Edit `.env`:
+
+```env
+DATABASE_URL=postgresql://user:pass@host/dbname?sslmode=require
+SECRET_KEY=run: python -c "import secrets; print(secrets.token_hex(32))"
+ALLOWED_ORIGINS=["http://localhost:3000"]
+FACE_MATCH_THRESHOLD=0.6
+LOCAL_STORAGE_PATH=static/faces
+LATE_THRESHOLD_HOUR=8
+DEBUG=False
+```
+
+```bash
+alembic upgrade head     # create all tables
+python seed_admin.py     # create default admin + demo student
+uvicorn app.main:app --reload
+```
+
+API running at **http://localhost:8000** · Swagger docs at **http://localhost:8000/docs**
+
+---
 
 ### 3. Frontend
 
 ```bash
 cd frontend
 
-# Install dependencies
-npm install
+cp .env.example .env.local   # Windows: copy .env.example .env.local
+# No changes needed — defaults point to localhost:8000
 
-# Configure environment (defaults point to localhost:8000 — usually no change needed)
-cp .env.example .env.local
-
-# Start dev server
-npm run dev
+pnpm install
+pnpm dev
 ```
 
-Frontend at `http://localhost:3000`
-
-### 4. Camera (choose one)
-
-**Option A — Browser (recommended, no extra install):**
-
-1. Log in as admin at `http://localhost:3000/login`
-2. Click **Live Camera** in the sidebar
-3. Click **Start Camera** — browser asks for camera permission
-4. Attendance is marked automatically every 2 seconds
-
-**Option B — Python gateway (for a dedicated entrance PC with a physical camera):**
-
-```bash
-# Install (if not already done)
-pip install opencv-python requests
-
-# Run — camera 0 = built-in webcam, 1 = first USB camera
-python camera_gateway.py --camera 0 --api http://localhost:8000
-
-# Headless mode (no preview window)
-python camera_gateway.py --camera 0 --api http://localhost:8000 --no-preview
-```
-
-Gateway keyboard shortcuts (preview window):
-
-| Key | Action |
-|-----|--------|
-| `Q` or `ESC` | Quit gracefully |
-| `Ctrl+C` | Force quit (terminal / headless) |
+App running at **http://localhost:3000**
 
 ---
 
-## First Login Credentials
+### 4. Default Credentials
 
 After running `seed_admin.py`:
 
-| Role | URL | Username | Password |
-|------|-----|----------|----------|
+| Role | Login page | Username / Student ID | Password |
+|------|-----------|----------------------|----------|
 | Admin | `/login` | `admin` | `admin123` |
-| Student Portal | `/portal/login` | `student` | `student123` |
+| Student | `/portal/login` | `2024-00001` | `student123` |
 
-> Change these credentials before any public demo.
-
----
-
-## Face Enrollment Guide
-
-1. Log in as admin → click **Face Enrollment** in the sidebar
-2. Search for a student and select them from the left panel
-3. Click **Start Camera** — browser asks for permission
-4. Click **Capture Photo** 3–5 times from slightly different angles (face centered in the oval guide)
-5. Click **Enroll All Photos** to upload and extract face encodings
-6. Click **Re-train Model** to average all enrolled photos for improved accuracy
-7. To remove a bad photo, click the **✕** button on any enrolled photo thumbnail
-8. Repeat for each student, then use the **Live Camera** or Python gateway to test recognition
+> Change these before any public demo.
 
 ---
 
@@ -296,126 +236,114 @@ After running `seed_admin.py`:
 
 Railway auto-detects Python via `requirements.txt` and starts the server using `Procfile`.
 
-> **Note:** dlib (face recognition) compiles from source on first build — Railway's build may take 20–30 minutes the first time.
+> First build may take 20–30 minutes — dlib compiles from source.
 
-1. Push your repo to GitHub
-2. Go to [railway.app](https://railway.app) → **New Project** → **Deploy from GitHub repo**
-3. Select your repo, set **Root Directory** to `backend/`
-4. Railway detects Python and runs: `uvicorn app.main:app --host 0.0.0.0 --port $PORT`
-5. In the Railway dashboard → **Variables**, add:
+1. Push your repo to GitHub.
+2. [railway.app](https://railway.app) → **New Project** → **Deploy from GitHub repo**.
+3. Set **Root Directory** to `backend/`.
+4. Add these environment variables in the Railway dashboard:
 
 | Variable | Value |
 |----------|-------|
-| `DATABASE_URL` | Your NeonTech connection string |
-| `SECRET_KEY` | Any random string of 32+ characters |
+| `DATABASE_URL` | NeonTech connection string |
+| `SECRET_KEY` | Random 32+ char string |
 | `CAMERA_API_KEY` | `attendease-camera-secret-key` |
 | `LOCAL_STORAGE_PATH` | `static/faces` |
 | `FACE_MATCH_THRESHOLD` | `0.55` |
 | `LATE_THRESHOLD_HOUR` | `8` |
-| `ALLOWED_ORIGINS` | `https://your-app.vercel.app` (add after Vercel deploy) |
+| `ALLOWED_ORIGINS` | `https://your-app.vercel.app` |
 
-6. **(Optional but recommended)** Add a **Volume** in the Railway dashboard mounted at `/app/static` so enrolled face photos persist across redeploys. Without this, photos are lost on each deploy (face encodings in the DB are kept, but re-enrollment will be needed).
-7. Copy your Railway public URL (e.g. `https://attendease-backend.up.railway.app`)
+5. Optionally add a **Volume** mounted at `/app/static` so face photos survive redeploys.
+6. Copy the Railway public URL — you'll need it for Vercel.
 
 ---
 
 ### Frontend → Vercel
 
-1. Go to [vercel.com](https://vercel.com) → **Add New Project** → import your GitHub repo
-2. Set **Root Directory** to `frontend/`
-3. Under **Environment Variables**, add:
+1. [vercel.com](https://vercel.com) → **Add New Project** → import your repo.
+2. Set **Root Directory** to `frontend/`.
+3. Add environment variable:
 
 | Variable | Value |
 |----------|-------|
 | `NEXT_PUBLIC_API_URL` | `https://your-backend.up.railway.app` |
 
-4. Click **Deploy** — Vercel builds Next.js automatically
-
-> **HTTPS note:** The browser camera page (`/camera`) uses `getUserMedia`, which requires HTTPS. Vercel provides HTTPS automatically. For local dev, `localhost` is exempt from this requirement.
-
-5. After Vercel gives you a URL (e.g. `https://attendease.vercel.app`), go back to Railway and update `ALLOWED_ORIGINS` to that URL.
+4. Deploy. Vercel provides HTTPS automatically (required for `getUserMedia`).
+5. Go back to Railway and update `ALLOWED_ORIGINS` to your Vercel URL.
 
 ---
 
-## API Endpoints Reference
+## API Reference
 
 ### Auth
-| Method | Endpoint | Auth | Description |
-|--------|----------|------|-------------|
-| POST | `/api/auth/admin/login` | None | Admin login → JWT |
-| POST | `/api/auth/student/login` | None | Student portal login → JWT |
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| POST | `/api/auth/admin/login` | Admin login → JWT |
+| POST | `/api/auth/student/login` | Student portal login → JWT |
 
 ### Students
-| Method | Endpoint | Auth | Description |
-|--------|----------|------|-------------|
-| GET | `/api/students/` | Admin | List all active students |
-| POST | `/api/students/` | Admin | Register new student |
-| GET | `/api/students/{id}` | Admin | Get student detail |
-| PUT | `/api/students/{id}` | Admin | Update student info |
-| POST | `/api/students/train` | Admin | Re-train all face encodings from stored photos |
-| POST | `/api/students/{id}/enroll-face` | Admin | Upload face photo (multipart/form-data) |
-| GET | `/api/students/{id}/photos` | Admin | List enrolled face photos |
-| DELETE | `/api/students/{id}/photos/{filename}` | Admin | Delete a specific enrolled photo |
-| GET | `/api/students/{id}/parents` | Admin | List parent contacts |
-| POST | `/api/students/{id}/parents` | Admin | Add parent contact |
-| PUT | `/api/students/{id}/parents/{parent_id}` | Admin | Update parent contact |
-| GET | `/api/students/{id}/portal-account` | Admin | Check if portal account exists |
-| POST | `/api/students/{id}/portal-account` | Admin | Create student portal login |
-| PUT | `/api/students/{id}/portal-account` | Admin | Reset portal account password |
-| GET | `/api/students/me` | Student | Get own profile |
-| PUT | `/api/students/me` | Student | Update own profile |
-| GET | `/api/students/me/parents` | Student | Get own parent contacts |
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| GET | `/api/students/` | List all students |
+| POST | `/api/students/` | Register new student |
+| GET | `/api/students/{id}` | Get student detail |
+| PUT | `/api/students/{id}` | Update student |
+| DELETE | `/api/students/{id}` | Delete student |
+| POST | `/api/students/train` | Re-train all face encodings |
+| POST | `/api/students/{id}/enroll-face` | Upload face photo |
+| GET | `/api/students/{id}/photos` | List enrolled photos |
+| DELETE | `/api/students/{id}/photos/{filename}` | Delete a photo |
+| GET | `/api/students/{id}/parents` | List parent contacts |
+| POST | `/api/students/{id}/parents` | Add parent contact |
+| PUT | `/api/students/{id}/parents/{parent_id}` | Update parent contact |
+| DELETE | `/api/students/{id}/parents/{parent_id}` | Delete parent contact |
+| GET | `/api/students/{id}/portal-account` | Check portal account |
+| POST | `/api/students/{id}/portal-account` | Create portal login |
+| PUT | `/api/students/{id}/portal-account` | Reset portal password |
+| GET | `/api/students/me` | Student: own profile |
+| PUT | `/api/students/me` | Student: update own profile |
+| GET | `/api/students/me/parents` | Student: own parent contacts |
 
 ### Attendance
-| Method | Endpoint | Auth | Description |
-|--------|----------|------|-------------|
-| GET | `/api/attendance/today` | Admin | Today's attendance records |
-| POST | `/api/attendance/override` | Admin | Manual attendance correction |
-| DELETE | `/api/attendance/` | Admin | Clear attendance (dev — all or by date) |
-| GET | `/api/attendance/student/me` | Student | Own attendance records (filterable by month/year) |
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| GET | `/api/attendance/today` | Today's records |
+| POST | `/api/attendance/override` | Manual correction |
+| DELETE | `/api/attendance/` | Clear records (dev) |
+| GET | `/api/attendance/student/me` | Student: own records |
 
 ### Camera
-| Method | Endpoint | Auth | Description |
-|--------|----------|------|-------------|
-| POST | `/api/camera/recognize` | Camera Key | Submit frame → multi-face recognition → list of results |
-| GET | `/api/camera/status` | Admin | Gateway live/offline status + seconds since last frame |
-| WS | `/api/camera/ws/live` | None | Real-time attendance WebSocket feed |
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| POST | `/api/camera/recognize` | Submit frame → attendance results |
+| GET | `/api/camera/status` | Gateway live/offline status |
+| WS | `/api/camera/ws/live` | Real-time attendance WebSocket |
 
 ### Notifications & Messages
-| Method | Endpoint | Auth | Description |
-|--------|----------|------|-------------|
-| GET | `/api/notifications/` | Admin | Parent notification log |
-| POST | `/api/messages/` | Student | Send support message to admin |
-| GET | `/api/messages/` | Admin | List all student messages |
-| PUT | `/api/messages/{id}/read` | Admin | Mark message as read |
-
-### Static
-| Method | Endpoint | Auth | Description |
-|--------|----------|------|-------------|
-| GET | `/static/faces/{student_id}/{filename}` | None | Serve enrolled face photos |
-| GET | `/health` | None | Health check |
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| GET | `/api/notifications/` | Parent notification log |
+| POST | `/api/messages/` | Student: send message to admin |
+| GET | `/api/messages/` | Admin: list all messages |
+| PUT | `/api/messages/{id}/read` | Admin: mark message as read |
 
 ---
 
 ## Face Recognition Notes
 
-- **Model:** HOG (Histogram of Oriented Gradients) — fast, CPU-friendly, no GPU required. Suitable for controlled gate/hallway settings with decent lighting.
-- **Encoding:** 128-dimensional face descriptor vector, stored as JSON string in PostgreSQL.
-- **Threshold:** 0.55 confidence (1 − Euclidean distance). Configurable via `FACE_MATCH_THRESHOLD`. Lower = stricter.
-- **Multi-face:** All faces detected in a single frame are recognized and attendance-marked simultaneously.
-- **Multi-photo averaging:** Enrolling 3–5 photos per student and clicking "Re-train Model" averages the encodings, significantly reducing false negatives.
-- **Late threshold:** Configurable via `LATE_THRESHOLD_HOUR` (default: 8 AM). Records after this hour are marked `late`.
-- **Duplicate prevention:** One attendance record per student per calendar day (PH time).
-- **Confidence logging:** Every recognition attempt stores the confidence score for analysis.
-- **Manual override:** Admin can correct any record with notes (`is_manual_override = true`).
+- **Model:** HOG (fast, CPU-only, no GPU needed) — suitable for gate/hallway with decent lighting.
+- **Encoding:** 128-D face descriptor stored in PostgreSQL.
+- **Multi-face:** All faces in a frame are processed in one pass.
+- **Threshold:** `FACE_MATCH_THRESHOLD=0.6` — lower = stricter, higher = more lenient.
+- **Accuracy tip:** Enroll 3–5 photos per student at different angles and always click **Re-train Model** after enrolling.
+- **Duplicate prevention:** One record per student per calendar day (PH time).
 
 ---
 
 ## Known Limitations
 
-- **Mock SMS:** Parent notifications are printed to the server console only — no real SMS is sent. Integrate with Twilio, Semaphore, or any SMS API by replacing `sms_service.py`.
-- **Frame-based scanning:** The camera captures still frames every 2 seconds rather than a live video stream. This is sufficient for an entrance gate with moderate throughput.
-- **Local face photo storage:** Photos are stored on the server's filesystem. On Railway without a persistent volume, they reset on each redeploy (encodings in the database are preserved). Add a Railway Volume at `/app/static` to avoid this.
-- **dlib compilation:** Installing `face_recognition` requires compiling dlib from source — takes 15–25 minutes and needs cmake + C++ build tools. On Windows, WSL2 (Ubuntu) is the easiest path.
-- **HTTPS for browser camera:** `getUserMedia` (used by `/camera` and `/enroll`) requires HTTPS in production. Vercel handles this automatically; for custom servers ensure SSL termination.
-- **Single server:** No horizontal scaling. Suitable for a thesis demo or small deployment.
+- **Mock SMS** — notifications are logged to the server console only. Replace `sms_service.py` with Twilio, Semaphore, or any SMS API for real messages.
+- **Local face photo storage** — photos live on the server filesystem. Add a Railway Volume at `/app/static` to persist them across redeploys.
+- **Frame-based scanning** — one frame every 2 seconds, not a continuous video stream. Sufficient for a single-lane entrance gate.
+- **dlib compilation** — first install takes 15–25 minutes and needs cmake + C++ build tools.
+- **Single server** — no horizontal scaling. Designed for thesis demo or small deployment.
