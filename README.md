@@ -74,7 +74,7 @@
 | Realtime | WebSocket (`/api/camera/ws/live`) |
 | Timezone | Philippine Time (UTC+8) via `zoneinfo` |
 | Notifications | Mock SMS (console log — swap `sms_service.py` for real provider) |
-| Deployment | Vercel (frontend) + Railway (backend) |
+| Deployment | Vercel (frontend) + Render (backend) |
 
 ---
 
@@ -107,7 +107,7 @@ attendease/
 │   │       └── sms_service.py             # Mock SMS (prints to console)
 │   ├── static/faces/                      # Enrolled face photos (auto-created)
 │   ├── requirements.txt
-│   ├── Procfile                           # Railway start command
+│   ├── Procfile                           # Render start command
 │   ├── seed_admin.py                      # Seed default admin + demo student
 │   ├── .env.example                       # Config template
 │   └── .env                              # Local config (git-ignored)
@@ -134,6 +134,7 @@ attendease/
 │   └── .env.local                        # Local config (git-ignored)
 │
 ├── .gitignore
+├── runtime.txt                            # Forces Python 3.11.9 on Render
 ├── USER_MANUAL.md                         # End-user guide (admin + student)
 └── README.md
 ```
@@ -232,16 +233,27 @@ After running `seed_admin.py`:
 
 ## Deployment
 
-### Backend → Railway
+### Backend → Render
 
-Railway auto-detects Python via `requirements.txt` and starts the server using `Procfile`.
+Render auto-detects Python via `requirements.txt` and starts the server using `Procfile`.
 
 > First build may take 20–30 minutes — dlib compiles from source.
 
+> **Important:** The repo includes a `runtime.txt` at the root with `python-3.11.9`. This forces Render to use Python 3.11 instead of its default (3.14), which has no pre-built `dlib` wheels and causes the build to hang indefinitely.
+
 1. Push your repo to GitHub.
-2. Go to [railway.app](https://railway.app) → **New Project** → **Deploy from GitHub repo**.
-3. Select your repo, then go to the service **Settings** → set **Root Directory** to `backend`.
-4. Under **Variables**, add:
+2. Go to [render.com](https://render.com) → **New** → **Web Service**.
+3. Connect your GitHub repo and select it.
+4. Set these in the Render dashboard:
+
+| Setting | Value |
+|---------|-------|
+| **Root Directory** | `backend` |
+| **Runtime** | `Python 3` |
+| **Build Command** | `pip install -r requirements.txt` |
+| **Start Command** | `uvicorn app.main:app --host 0.0.0.0 --port $PORT` |
+
+5. Under **Environment Variables**, add:
 
 | Variable | Value |
 |----------|-------|
@@ -253,8 +265,10 @@ Railway auto-detects Python via `requirements.txt` and starts the server using `
 | `LATE_THRESHOLD_HOUR` | `8` |
 | `ALLOWED_ORIGINS` | `https://your-app.vercel.app` |
 
-5. Optionally add a **Volume** mounted at `/app/static` so enrolled face photos survive redeploys.
-6. Copy the Railway public URL (e.g. `https://attendease.up.railway.app`) — you'll need it for Vercel.
+6. Optionally add a **Disk** (under **Advanced**) mounted at `/app/static` so enrolled face photos survive redeploys.
+7. Click **Deploy**. Copy the Render public URL (e.g. `https://attendease.onrender.com`) — you'll need it for Vercel.
+
+> **Free tier note:** Render free web services spin down after 15 minutes of inactivity. The first request after idle takes ~30 seconds to wake up.
 
 ---
 
@@ -266,10 +280,10 @@ Railway auto-detects Python via `requirements.txt` and starts the server using `
 
 | Variable | Value |
 |----------|-------|
-| `NEXT_PUBLIC_API_URL` | `https://your-backend.up.railway.app` |
+| `NEXT_PUBLIC_API_URL` | `https://your-backend.onrender.com` |
 
 4. Deploy. Vercel provides HTTPS automatically (required for `getUserMedia`).
-5. Go back to Railway and update `ALLOWED_ORIGINS` to your Vercel URL.
+5. Go back to Render and update `ALLOWED_ORIGINS` to your Vercel URL.
 
 ---
 
