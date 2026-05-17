@@ -239,9 +239,9 @@ Railway auto-detects Python via `requirements.txt` and starts the server using `
 > First build may take 20–30 minutes — dlib compiles from source.
 
 1. Push your repo to GitHub.
-2. [railway.app](https://railway.app) → **New Project** → **Deploy from GitHub repo**.
-3. Set **Root Directory** to `backend/`.
-4. Add these environment variables in the Railway dashboard:
+2. Go to [railway.app](https://railway.app) → **New Project** → **Deploy from GitHub repo**.
+3. Select your repo, then go to the service **Settings** → set **Root Directory** to `backend`.
+4. Under **Variables**, add:
 
 | Variable | Value |
 |----------|-------|
@@ -253,15 +253,15 @@ Railway auto-detects Python via `requirements.txt` and starts the server using `
 | `LATE_THRESHOLD_HOUR` | `8` |
 | `ALLOWED_ORIGINS` | `https://your-app.vercel.app` |
 
-5. Optionally add a **Volume** mounted at `/app/static` so face photos survive redeploys.
-6. Copy the Railway public URL — you'll need it for Vercel.
+5. Optionally add a **Volume** mounted at `/app/static` so enrolled face photos survive redeploys.
+6. Copy the Railway public URL (e.g. `https://attendease.up.railway.app`) — you'll need it for Vercel.
 
 ---
 
 ### Frontend → Vercel
 
 1. [vercel.com](https://vercel.com) → **Add New Project** → import your repo.
-2. Set **Root Directory** to `frontend/`.
+2. Set **Root Directory** to `frontend`.
 3. Add environment variable:
 
 | Variable | Value |
@@ -343,7 +343,7 @@ Railway auto-detects Python via `requirements.txt` and starts the server using `
 ## Known Limitations
 
 - **Mock SMS** — notifications are logged to the server console only. Replace `sms_service.py` with Twilio, Semaphore, or any SMS API for real messages.
-- **Local face photo storage** — photos live on the server filesystem. Add a Railway Volume at `/app/static` to persist them across redeploys.
+- **Local face photo storage** — photos live on the server filesystem. Add a Render Volume at `/app/static` to persist them across redeploys.
 - **Frame-based scanning** — one frame every 2 seconds, not a continuous video stream. Sufficient for a single-lane entrance gate.
 - **dlib compilation** — first install takes 15–25 minutes and needs cmake + C++ build tools.
 - **Single server** — no horizontal scaling. Designed for thesis demo or small deployment.
