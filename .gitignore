@@ -1,0 +1,51 @@
+# ── Secrets & environment ──────────────────────────────────────────────────
+.env
+.env.local
+.env.*.local
+*.env
+
+# ── Python ────────────────────────────────────────────────────────────────
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+*.pyc
+venv/
+.venv/
+env/
+*.egg-info/
+dist/
+build/
+*.so
+.Python
+
+# ── Node / Next.js ────────────────────────────────────────────────────────
+node_modules/
+.pnp
+.pnp.js
+.next/
+out/
+.cache/
+tsconfig.tsbuildinfo
+*.tsbuildinfo
+
+# ── Uploaded face photos (sensitive biometric data) ───────────────────────
+backend/static/faces/
+
+# ── OS & editor ───────────────────────────────────────────────────────────
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# ── Claude Code ───────────────────────────────────────────────────────────
+.claude/
+
+# ── Misc artifacts ────────────────────────────────────────────────────────
+*.log
+*.pid
+*.seed
+package.json.*[0-9]
+!pnpm-lock.yaml
