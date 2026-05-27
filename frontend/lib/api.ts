@@ -6,6 +6,8 @@ export interface StudentResponse {
   email: string;
   course: string;
   year_level: number;
+  section_id: string | null;
+  section_name: string | null;
   has_face_enrolled: boolean;
   is_active: boolean;
 }
@@ -66,6 +68,7 @@ export interface StudentUpdateData {
   email?: string;
   course?: string;
   year_level?: number;
+  section_id?: string | null;
 }
 
 export interface ParentInfo {
@@ -82,6 +85,33 @@ export interface StudentMessage {
   body: string;
   is_read: boolean;
   created_at: string;
+}
+
+export interface SubjectSchedule {
+  id: string;
+  day_of_week: number; // 0=Monday, 6=Sunday
+  start_time: string;  // "HH:MM"
+  end_time?: string;   // "HH:MM"
+  room?: string;
+}
+
+export interface Subject {
+  id: string;
+  subject_code: string;
+  name: string;
+  teacher: string;
+  schedules: SubjectSchedule[];
+  student_count?: number;
+}
+
+export interface Section {
+  id: string;
+  name: string;
+  created_at: string;
+}
+
+export interface AppSettings {
+  school_name: string;
 }
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
@@ -152,7 +182,7 @@ export const api = {
   updatePortalPassword: (studentId: string, password: string) =>
     apiFetch<{ message: string }>(`/api/students/${studentId}/portal-account`, { method: "PUT", body: JSON.stringify({ password }) }),
 
-  // Face Enrollment (multipart — no JSON Content-Type)
+  // Face Enrollment (multipart - no JSON Content-Type)
   enrollFace: (studentId: string, formData: FormData): Promise<{ message: string; photo_path: string }> => {
     const token = getToken("admin");
     return fetch(`${API_URL}/api/students/${studentId}/enroll-face`, {
@@ -170,7 +200,9 @@ export const api = {
 
   // Attendance
   getTodayAttendance: () => apiFetch<AttendanceRecord[]>("/api/attendance/today"),
-  overrideAttendance: (data: { student_id: string; date: string; status: string; notes: string }) =>
+  getAttendanceByDate: (date: string) =>
+    apiFetch<AttendanceRecord[]>(`/api/attendance/by-date?date=${date}`),
+  overrideAttendance: (data: { student_id: string; date: string; status: string; notes: string; time_in?: string }) =>
     apiFetch<{ message: string }>("/api/attendance/override", { method: "POST", body: JSON.stringify(data) }),
   getMyAttendance: (params: Record<string, string | number> = {}) =>
     apiFetch<AttendanceData>(`/api/attendance/student/me?${new URLSearchParams(params as Record<string, string>)}`, {}, "student"),
@@ -178,12 +210,53 @@ export const api = {
   // Notifications
   getNotifications: (limit = 50) =>
     apiFetch<NotificationLog[]>(`/api/notifications/?limit=${limit}`),
+  clearNotifications: () =>
+    apiFetch<{ deleted: number }>("/api/notifications/", { method: "DELETE" }),
 
   // Messages
   sendMessage: (body: string) =>
     apiFetch<StudentMessage>("/api/messages/", { method: "POST", body: JSON.stringify({ body }) }, "student"),
   getMessages: () =>
     apiFetch<StudentMessage[]>("/api/messages/"),
+  getUnreadMessageCount: () =>
+    apiFetch<{ count: number }>("/api/messages/unread-count"),
   markMessageRead: (id: string) =>
     apiFetch<{ message: string }>(`/api/messages/${id}/read`, { method: "PUT" }),
+
+  // Subjects
+  getSubjects: () =>
+    apiFetch<Subject[]>("/api/subjects/"),
+  getSubject: (id: string) =>
+    apiFetch<Subject>(`/api/subjects/${id}`),
+  createSubject: (data: { subject_code: string; name: string; teacher: string; schedules: { day_of_week: number; start_time: string; end_time?: string; room?: string }[] }) =>
+    apiFetch<Subject>("/api/subjects/", { method: "POST", body: JSON.stringify(data) }),
+  updateSubject: (id: string, data: { subject_code: string; name: string; teacher: string; schedules: { day_of_week: number; start_time: string; end_time?: string; room?: string }[] }) =>
+    apiFetch<Subject>(`/api/subjects/${id}`, { method: "PUT", body: JSON.stringify(data) }),
+  deleteSubject: (id: string) =>
+    apiFetch<void>(`/api/subjects/${id}`, { method: "DELETE" }),
+  getSubjectStudents: (id: string) =>
+    apiFetch<StudentResponse[]>(`/api/subjects/${id}/students`),
+  assignStudentToSubject: (subjectId: string, studentId: string) =>
+    apiFetch<{ message: string }>(`/api/subjects/${subjectId}/students`, { method: "POST", body: JSON.stringify({ student_id: studentId }) }),
+  unassignStudentFromSubject: (subjectId: string, studentId: string) =>
+    apiFetch<void>(`/api/subjects/${subjectId}/students/${studentId}`, { method: "DELETE" }),
+  getStudentSubjects: (studentId: string) =>
+    apiFetch<Subject[]>(`/api/subjects/by-student/${studentId}`),
+  getMySubjects: () =>
+    apiFetch<Subject[]>("/api/subjects/my", {}, "student"),
+
+  // Sections
+  getSections: () =>
+    apiFetch<Section[]>("/api/sections/"),
+  createSection: (name: string) =>
+    apiFetch<Section>("/api/sections/", { method: "POST", body: JSON.stringify({ name }) }),
+  updateSection: (id: string, name: string) =>
+    apiFetch<Section>(`/api/sections/${id}`, { method: "PUT", body: JSON.stringify({ name }) }),
+  deleteSection: (id: string) =>
+    apiFetch<void>(`/api/sections/${id}`, { method: "DELETE" }),
+
+  // Settings
+  getSettings: () => apiFetch<AppSettings>("/api/settings/"),
+  updateSettings: (data: Partial<AppSettings>) =>
+    apiFetch<AppSettings>("/api/settings/", { method: "PUT", body: JSON.stringify(data) }),
 };

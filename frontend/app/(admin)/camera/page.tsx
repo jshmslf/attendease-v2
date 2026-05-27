@@ -89,7 +89,7 @@ export default function CameraPage() {
         const status = (r.status || "").toUpperCase();
         const label = r.already_marked_today
           ? `${r.student_name} [Already Marked]`
-          : `${r.student_name} — ${status}`;
+          : `${r.student_name} - ${status}`;
         ctx.fillText(label, mLeft, Math.max(top - 12, 20));
         ctx.font = "14px sans-serif";
         ctx.fillStyle = "#aaa";
@@ -251,7 +251,7 @@ export default function CameraPage() {
           style={{ transform: "scaleX(-1)" }}
         />
 
-        {/* Bounding box overlay — NOT CSS-mirrored; x-coords are flipped in drawBoxes */}
+        {/* Bounding box overlay - NOT CSS-mirrored; x-coords are flipped in drawBoxes */}
         <canvas
           ref={overlayRef}
           className="absolute inset-0 w-full h-full"
@@ -301,7 +301,7 @@ export default function CameraPage() {
                 <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse flex-shrink-0" />
                 <span className="text-sm font-semibold" style={{ color: "#32cd32" }}>
                   {lastEvent.student_name} ({lastEvent.student_id})
-                  {" — "}{(lastEvent.status || "").toUpperCase()}
+                  {" - "}{(lastEvent.status || "").toUpperCase()}
                 </span>
               </div>
               <span className="text-xs" style={{ color: "#888" }}>

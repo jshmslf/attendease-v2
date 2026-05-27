@@ -24,6 +24,10 @@ class Settings(BaseSettings):
     LOCAL_STORAGE_PATH: str = "static/faces"
     LATE_THRESHOLD_HOUR: int = 8  # Students arriving at or after this hour are marked late
 
+    # PhilSMS
+    PHILSMS_TOKEN: str = ""
+    PHILSMS_SENDER_ID: str = "PhilSMS"
+
     class Config:
         env_file = ".env"
 

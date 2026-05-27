@@ -1,6 +1,6 @@
 -- AttendEase Schema for NeonTech
 -- Paste this into the NeonTech SQL editor (or run via psql with your connection string)
--- Do NOT include CREATE DATABASE — NeonTech already created it for you.
+-- Do NOT include CREATE DATABASE - NeonTech already created it for you.
 
 CREATE TABLE IF NOT EXISTS students (
     id          TEXT PRIMARY KEY,

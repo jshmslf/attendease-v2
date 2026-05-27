@@ -9,8 +9,8 @@ Usage:
     python camera_gateway.py --camera 0 --api http://localhost:8000
 
 Keyboard shortcuts (preview window):
-    Q or ESC  — quit gracefully
-    Ctrl+C    — force quit (headless / terminal)
+    Q or ESC  - quit gracefully
+    Ctrl+C    - force quit (headless / terminal)
 
 Requirements:
     pip install opencv-python requests
@@ -32,9 +32,9 @@ RECOGNITION_INTERVAL = 2.0
 CAMERA_API_KEY = "attendease-camera-secret-key"
 
 # Colors (BGR)
-COLOR_MATCHED = (50, 205, 50)       # green — new attendance
-COLOR_ALREADY = (200, 200, 0)       # cyan — already marked today
-COLOR_UNKNOWN = (60, 60, 220)       # red — unrecognized
+COLOR_MATCHED = (50, 205, 50)       # green - new attendance
+COLOR_ALREADY = (200, 200, 0)       # cyan - already marked today
+COLOR_UNKNOWN = (60, 60, 220)       # red - unrecognized
 
 
 def encode_frame(frame) -> str:
@@ -92,7 +92,7 @@ def recognition_worker(
                 if r.get("recognized") and r.get("attendance_marked"):
                     logger.info(
                         f"✓ Marked: {r['student_name']} "
-                        f"({r['student_id']}) — {r['status']}"
+                        f"({r['student_id']}) - {r['status']}"
                     )
 
         time.sleep(RECOGNITION_INTERVAL)
@@ -142,7 +142,7 @@ def draw_multi_overlay(frame, results: list | None):
             name = r.get("student_name", "")
             status = (r.get("status") or "").upper()
             confidence = r.get("confidence", 0)
-            suffix = " [Already Marked]" if already else f" — {status}"
+            suffix = " [Already Marked]" if already else f" - {status}"
             label = f"{name}{suffix}"
             conf_label = f"{confidence:.0%}"
 
@@ -163,7 +163,7 @@ def draw_multi_overlay(frame, results: list | None):
         sid = last_event.get("student_id", "")
         status = (last_event.get("status") or "").upper()
         conf = last_event.get("confidence", 0)
-        cv2.putText(frame, f"{name} ({sid}) — {status}",
+        cv2.putText(frame, f"{name} ({sid}) - {status}",
                     (12, h - 28), cv2.FONT_HERSHEY_SIMPLEX, 0.65, COLOR_MATCHED, 2)
         cv2.putText(frame, f"Confidence: {conf:.0%}",
                     (12, h - 8), cv2.FONT_HERSHEY_SIMPLEX, 0.45, (150, 150, 150), 1)
@@ -192,7 +192,7 @@ def run_gateway(camera_source, camera_id: str, api_url: str, show_preview: bool 
     cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 720)
     cap.set(cv2.CAP_PROP_FPS, 30)
 
-    logger.info(f"Camera gateway started — ID: {camera_id}, API: {api_url}")
+    logger.info(f"Camera gateway started - ID: {camera_id}, API: {api_url}")
     logger.info("Press Q or ESC in the preview window to quit.")
 
     frame_queue: queue.Queue = queue.Queue(maxsize=1)

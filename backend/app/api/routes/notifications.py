@@ -1,6 +1,6 @@
 from fastapi import APIRouter, Depends, Query
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, desc
+from sqlalchemy import select, desc, delete as sql_delete
 
 from app.db.session import get_db
 from app.models.models import NotificationLog, Parent, Student
@@ -39,3 +39,14 @@ async def list_notifications(
         }
         for log, par, stu in rows
     ]
+
+
+@router.delete("/")
+async def clear_notifications(
+    db: AsyncSession = Depends(get_db),
+    _=Depends(get_current_admin),
+):
+    """Delete all notification log records."""
+    result = await db.execute(sql_delete(NotificationLog))
+    await db.commit()
+    return {"deleted": result.rowcount}

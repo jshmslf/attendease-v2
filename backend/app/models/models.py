@@ -1,4 +1,4 @@
-from sqlalchemy import Column, String, Boolean, DateTime, Float, ForeignKey, Text, Integer
+from sqlalchemy import Column, String, Boolean, DateTime, Float, ForeignKey, Text, Integer, Time, UniqueConstraint
 from sqlalchemy.orm import relationship
 from sqlalchemy.dialects.postgresql import UUID
 import uuid
@@ -21,14 +21,17 @@ class Student(Base):
     year_level = Column(Integer, nullable=False)
     profile_image_url = Column(String, nullable=True)
     face_encoding = Column(Text, nullable=True)  # JSON-serialized numpy array
+    section_id = Column(String, ForeignKey("sections.id"), nullable=True)
     is_active = Column(Boolean, default=True)
     created_at = Column(DateTime, default=ph_now)
 
     # Relationships
+    section = relationship("Section", backref="students")
     attendances = relationship("Attendance", back_populates="student")
     parents = relationship("Parent", back_populates="student")
     portal_account = relationship("PortalAccount", back_populates="student", uselist=False)
     messages = relationship("StudentMessage", back_populates="student")
+    subject_assignments = relationship("StudentSubject", back_populates="student", cascade="all, delete-orphan")
 
 
 class Parent(Base):
@@ -127,3 +130,57 @@ class AdminAccount(Base):
     is_active = Column(Boolean, default=True)
     last_login = Column(DateTime, nullable=True)
     created_at = Column(DateTime, default=ph_now)
+
+
+class Section(Base):
+    __tablename__ = "sections"
+
+    id = Column(String, primary_key=True, default=generate_uuid)
+    name = Column(String, unique=True, nullable=False) 
+    created_at = Column(DateTime, default=ph_now)
+
+
+class Subject(Base):
+    __tablename__ = "subjects"
+
+    id = Column(String, primary_key=True, default=generate_uuid)
+    subject_code = Column(String, unique=True, nullable=False)  # e.g. "CS101"
+    name = Column(String, nullable=False)
+    teacher = Column(String, nullable=False)
+    created_at = Column(DateTime, default=ph_now)
+
+    schedules = relationship("SubjectSchedule", back_populates="subject", cascade="all, delete-orphan")
+    enrolled_students = relationship("StudentSubject", back_populates="subject", cascade="all, delete-orphan")
+
+
+class SubjectSchedule(Base):
+    __tablename__ = "subject_schedules"
+
+    id = Column(String, primary_key=True, default=generate_uuid)
+    subject_id = Column(String, ForeignKey("subjects.id"), nullable=False)
+    day_of_week = Column(Integer, nullable=False)  # 0=Monday, 6=Sunday
+    start_time = Column(Time, nullable=False)
+    end_time = Column(Time, nullable=True)
+    room = Column(String, nullable=True)
+
+    subject = relationship("Subject", back_populates="schedules")
+
+
+class StudentSubject(Base):
+    __tablename__ = "student_subjects"
+    __table_args__ = (UniqueConstraint("student_id", "subject_id", name="uq_student_subject"),)
+
+    id = Column(String, primary_key=True, default=generate_uuid)
+    student_id = Column(String, ForeignKey("students.id"), nullable=False)
+    subject_id = Column(String, ForeignKey("subjects.id"), nullable=False)
+    assigned_at = Column(DateTime, default=ph_now)
+
+    student = relationship("Student", back_populates="subject_assignments")
+    subject = relationship("Subject", back_populates="enrolled_students")
+
+
+class AppSettings(Base):
+    __tablename__ = "app_settings"
+
+    id = Column(String, primary_key=True, default=generate_uuid)
+    school_name = Column(String, default="AttendEase")

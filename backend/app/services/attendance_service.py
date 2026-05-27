@@ -3,7 +3,7 @@ from sqlalchemy import select, and_, func, case
 from datetime import datetime
 import logging
 
-from app.models.models import Attendance, Student, Parent, NotificationLog
+from app.models.models import Attendance, Student, Parent, NotificationLog, SubjectSchedule, StudentSubject, AppSettings
 from app.services.sms_service import send_sms_notification
 from app.core.config import settings
 from app.core.timezone import ph_now
@@ -29,11 +29,33 @@ async def is_already_marked_today(student_id: str, db: AsyncSession) -> bool:
     return result.scalar_one_or_none() is not None
 
 
-def determine_status(time_in: datetime) -> str:
-    """Mark as 'late' if arriving at or after the configured threshold hour."""
-    if time_in.hour >= settings.LATE_THRESHOLD_HOUR:
-        return "late"
-    return "present"
+async def determine_status(db: AsyncSession, student_id: str, time_in: datetime) -> str:
+    """
+    Determine present/late based on the student's subject schedule for today.
+    Uses the earliest class start time on the given day as the threshold.
+    Falls back to the global LATE_THRESHOLD_HOUR if no schedule exists for today.
+    """
+    day_of_week = time_in.weekday()  # 0=Monday, 6=Sunday
+
+    result = await db.execute(
+        select(func.min(SubjectSchedule.start_time)).where(
+            and_(
+                SubjectSchedule.day_of_week == day_of_week,
+                SubjectSchedule.subject_id.in_(
+                    select(StudentSubject.subject_id).where(
+                        StudentSubject.student_id == student_id
+                    )
+                )
+            )
+        )
+    )
+    earliest = result.scalar_one_or_none()
+
+    if earliest is not None:
+        return "late" if time_in.time() >= earliest else "present"
+
+    # No subjects scheduled for today → fall back to global threshold
+    return "late" if time_in.hour >= settings.LATE_THRESHOLD_HOUR else "present"
 
 
 async def mark_attendance(
@@ -53,7 +75,7 @@ async def mark_attendance(
         return None
 
     now = ph_now()
-    status = determine_status(now)
+    status = await determine_status(db, student.id, now)
 
     attendance = Attendance(
         student_id=student.id,
@@ -98,15 +120,18 @@ async def notify_parents(
         logger.warning(f"No active parents found for student {student.student_id}")
         return
 
+    settings_row = (await db.execute(select(AppSettings).limit(1))).scalar_one_or_none()
+    school_name = settings_row.school_name if settings_row else "AttendEase"
+
     time_str = attendance.time_in.strftime("%I:%M %p")
-    status_text = "present" if attendance.status == "present" else "LATE"
-    message = (
-        f"[AttendEase] {student.first_name} {student.last_name} "
-        f"({student.student_id}) has been marked {status_text} "
-        f"at {time_str} today. - {settings.APP_NAME}"
-    )
+    status_text = "present" if attendance.status == "present" else "late"
+    student_name = f"{student.first_name} {student.last_name}"
 
     for parent in parents:
+        message = (
+            f"Hello Ms/Mr {parent.name}! {student_name} has been marked "
+            f"{status_text} at {time_str} today! - {school_name}"
+        )
         log = NotificationLog(
             parent_id=parent.id,
             attendance_id=attendance.id,

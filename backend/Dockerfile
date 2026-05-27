@@ -2,7 +2,7 @@ FROM python:3.11-slim
 
 WORKDIR /app
 
-# Install dlib-bin (pre-built binary — no cmake, no compilation, no RAM spike)
+# Install dlib-bin (pre-built binary - no cmake, no compilation, no RAM spike)
 # Also install face-recognition's other deps that we skip below
 RUN pip install --no-cache-dir \
     dlib-bin==19.24.6 \

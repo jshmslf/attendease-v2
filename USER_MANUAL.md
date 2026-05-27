@@ -1,4 +1,4 @@
-# AttendEase — User Manual
+# AttendEase - User Manual
 
 > Camera-based automatic attendance system for university entrance gates.
 > Students are recognized by face as they walk in, marked present or late, and the admin sees it in real time.
@@ -35,7 +35,7 @@
 
 1. Open `https://your-app.vercel.app` in your browser.
 2. Enter your **username** and **password** on the login screen.
-3. Click **Sign In** — you will land on the Dashboard.
+3. Click **Sign In** - you will land on the Dashboard.
 
 ---
 
@@ -43,8 +43,8 @@
 
 The Dashboard is your main overview screen. It shows:
 
-- **Today's attendance stats** — how many students are present, late, or absent so far.
-- **Live feed** — every time a student is recognized at the gate, a card appears here in real time (no page refresh needed).
+- **Today's attendance stats** - how many students are present, late, or absent so far.
+- **Live feed** - every time a student is recognized at the gate, a card appears here in real time (no page refresh needed).
 - Today's date is shown in the top right corner.
 
 ---
@@ -61,9 +61,9 @@ Go to **Students** in the left sidebar.
 **Editing a student:**
 1. Click **Edit** on any row.
 2. A panel opens with three tabs:
-   - **Student Info** — update name, email, course, year.
-   - **Parent / Guardian** — add or remove the student's emergency contacts (used for SMS notifications).
-   - **Credentials** — create or reset the student's portal login password.
+   - **Student Info** - update name, email, course, year.
+   - **Parent / Guardian** - add or remove the student's emergency contacts (used for SMS notifications).
+   - **Credentials** - create or reset the student's portal login password.
 3. Make your changes and click the save button in each tab.
 
 **Deleting a student:**
@@ -81,9 +81,9 @@ This is where you register a student's face so the camera can recognize them.
 
 1. Go to **Face Enrollment** in the sidebar.
 2. Search for the student in the left list and click their name.
-3. Click **Start Camera** — allow camera access if the browser asks.
+3. Click **Start Camera** - allow camera access if the browser asks.
 4. Position the student's face in the frame (good lighting, looking straight at the camera).
-5. Click **Capture** — do this **3 to 5 times** from slightly different angles (slight left, slight right, straight).
+5. Click **Capture** - do this **3 to 5 times** from slightly different angles (slight left, slight right, straight).
 6. Click **Enroll Photos**. The photos are saved to the server.
 7. After enrolling one or more students, click **Re-train Model** (top right). This reprocesses all photos and improves accuracy.
 
@@ -97,7 +97,7 @@ This page turns the admin's browser into the entrance gate camera. No extra hard
 
 1. Go to **Live Camera** in the sidebar.
 2. Optionally change the **Camera ID** field (useful if you have multiple gates).
-3. Click **Start Camera** — allow camera access.
+3. Click **Start Camera** - allow camera access.
 4. Point the camera at the entrance. Every 2 seconds, a frame is sent to the server.
 5. When a student is recognized:
    - A **green box** appears around their face with their name and status (Present/Late).
@@ -110,7 +110,7 @@ This page turns the admin's browser into the entrance gate camera. No extra hard
 
 #### Notifications
 
-Shows the full attendance log — every recognition event with student name, time, date, and status. Use this to review past records.
+Shows the full attendance log - every recognition event with student name, time, date, and status. Use this to review past records.
 
 ---
 
@@ -136,11 +136,11 @@ Click **Mark as Read** on any message to clear the highlight.
 
 After logging in, you will see:
 
-- **Your profile** — name, student ID, course, year level, email.
+- **Your profile** - name, student ID, course, year level, email.
 - **Parent / Guardian contacts** (if added by admin).
-- **Attendance Rate** — percentage for the selected period, with a color-coded bar.
-- **Breakdown** — total Present, Late, and Absent counts.
-- **Attendance Records** — a list of every recorded day with the date and time-in.
+- **Attendance Rate** - percentage for the selected period, with a color-coded bar.
+- **Breakdown** - total Present, Late, and Absent counts.
+- **Attendance Records** - a list of every recorded day with the date and time-in.
 
 Use the **Month** and **Year** dropdowns to filter records. Click **Refresh** to reload.
 
@@ -173,7 +173,7 @@ Make sure you have these installed before starting:
 
 You also need a free **NeonTech PostgreSQL** database:
 1. Go to https://neon.tech and create a free account.
-2. Create a new project — copy the **Connection String** (it looks like `postgresql://user:pass@host/dbname?sslmode=require`).
+2. Create a new project - copy the **Connection String** (it looks like `postgresql://user:pass@host/dbname?sslmode=require`).
 
 ---
 
@@ -293,7 +293,7 @@ copy .env.example .env.local
 cp .env.example .env.local
 ```
 
-The default values in `.env.local` already point to `localhost:8000` — no changes needed for local dev.
+The default values in `.env.local` already point to `localhost:8000` - no changes needed for local dev.
 
 **Install dependencies:**
 
@@ -322,21 +322,21 @@ The app is now running at **http://localhost:3000**
 
 This applies to both the deployed version and local. Follow this exact order every time you register a new student:
 
-**Step 1 — Add the student**
+**Step 1 - Add the student**
 - Go to **Students** → click **+ Add Student** → fill in the form → save.
 
-**Step 2 — Enroll their face**
+**Step 2 - Enroll their face**
 - Go to **Face Enrollment** → search and select the student.
 - Click **Start Camera** and allow camera access.
 - Have the student sit in front of the camera with good lighting (face the light source, not away from it).
 - Click **Capture** 3–5 times, slightly tilting their head between captures.
 - Click **Enroll Photos**.
 
-**Step 3 — Re-train the model**
+**Step 3 - Re-train the model**
 - Click **Re-train Model** (top right of Face Enrollment page).
 - Wait for the confirmation message. This step is required after enrolling any new student.
 
-**Step 4 — Test it**
+**Step 4 - Test it**
 - Go to **Live Camera** → Start Camera.
 - Have the student walk past the camera.
 - A green box with their name should appear within 2 seconds.
@@ -348,10 +348,10 @@ This applies to both the deployed version and local. Follow this exact order eve
 **Camera not working in the browser**
 - Check that you allowed camera access when the browser asked.
 - Try a different browser (Chrome or Edge recommended).
-- If using HTTPS on the deployed version, camera access only works on secure origins — this is handled automatically by Vercel.
+- If using HTTPS on the deployed version, camera access only works on secure origins - this is handled automatically by Vercel.
 
 **Face not being recognized**
-- The student may not have been enrolled yet — go to Face Enrollment.
+- The student may not have been enrolled yet - go to Face Enrollment.
 - Re-enroll with better lighting (avoid backlighting or shadows across the face).
 - Capture more photos (5 is better than 3).
 - Click **Re-train Model** again after re-enrolling.
@@ -367,7 +367,7 @@ This applies to both the deployed version and local. Follow this exact order eve
 **"Already marked today" (cyan box on camera)**
 - This is normal. Once a student is marked for the day, subsequent recognitions show cyan instead of green to avoid duplicates.
 
-**Backend won't start — missing packages**
+**Backend won't start - missing packages**
 - Make sure your virtual environment is activated (`venv\Scripts\activate` on Windows).
 - Run `pip install -r requirements.txt` again.
 

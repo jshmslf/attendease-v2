@@ -1,9 +1,27 @@
 "use client";
 
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import { api, AttendanceRecord } from "@/lib/api";
 
 const WS_URL = process.env.NEXT_PUBLIC_WS_URL || "ws://localhost:8000";
+
+function todayIso(): string {
+  return new Date().toISOString().split("T")[0];
+}
+
+function shiftDate(dateStr: string, days: number): string {
+  const d = new Date(dateStr + "T00:00:00");
+  d.setDate(d.getDate() + days);
+  return d.toISOString().split("T")[0];
+}
+
+function formatDateLabel(dateStr: string): string {
+  return new Date(dateStr + "T00:00:00").toLocaleDateString("en-US", {
+    month: "long",
+    day: "numeric",
+    year: "numeric",
+  });
+}
 
 interface WsAttendanceUpdate {
   type: string;
@@ -24,6 +42,7 @@ interface Stats {
 interface OverrideForm {
   student_id: string;
   date: string;
+  time_in: string;
   status: string;
   notes: string;
 }
@@ -32,6 +51,14 @@ interface OverrideModalProps {
   record: AttendanceRecord;
   onClose: () => void;
   onSuccess: () => void;
+}
+
+interface ClearConfirmModalProps {
+  date: string;
+  clearing: boolean;
+  error: string;
+  onConfirm: () => void;
+  onClose: () => void;
 }
 
 const statusMap: Record<string, string> = {
@@ -49,10 +76,67 @@ function StatusBadge({ status }: { status: string }) {
   );
 }
 
+function ClearConfirmModal({ date, clearing, error, onConfirm, onClose }: ClearConfirmModalProps) {
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">
+      <div
+        className="w-full max-w-sm rounded-2xl p-6 space-y-4"
+        style={{ background: "var(--bg-card)", border: "1px solid var(--border)" }}
+      >
+        <div className="flex items-center gap-3">
+          <div
+            className="w-10 h-10 rounded-full flex items-center justify-center flex-shrink-0"
+            style={{ background: "#7f1d1d30" }}
+          >
+            <svg className="w-5 h-5" fill="none" stroke="#ef4444" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
+                d="M12 9v2m0 4h.01M5.07 19H19a2 2 0 001.75-2.75L13.75 4a2 2 0 00-3.5 0L3.25 16.25A2 2 0 005.07 19z" />
+            </svg>
+          </div>
+          <div>
+            <p className="font-semibold text-sm" style={{ color: "var(--text-primary)" }}>
+              Clear attendance records?
+            </p>
+            <p className="text-xs mt-0.5" style={{ color: "var(--text-secondary)" }}>
+              All records for <strong style={{ color: "var(--text-primary)" }}>{formatDateLabel(date)}</strong> will be permanently deleted.
+            </p>
+          </div>
+        </div>
+
+        {error && (
+          <div className="px-3 py-2 rounded-lg text-sm"
+            style={{ background: "#7f1d1d30", border: "1px solid #ef4444", color: "#fca5a5" }}>
+            {error}
+          </div>
+        )}
+
+        <div className="flex gap-2 pt-1">
+          <button
+            onClick={onClose}
+            className="flex-1 py-2 rounded-lg text-sm font-medium"
+            style={{ background: "var(--bg-surface)", color: "var(--text-secondary)" }}
+          >
+            Cancel
+          </button>
+          <button
+            onClick={onConfirm}
+            disabled={clearing}
+            className="flex-1 py-2 rounded-lg text-sm font-semibold text-white"
+            style={{ background: "#ef4444", opacity: clearing ? 0.6 : 1, cursor: clearing ? "not-allowed" : "pointer" }}
+          >
+            {clearing ? "Clearing..." : "Clear Records"}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function OverrideModal({ record, onClose, onSuccess }: OverrideModalProps) {
   const [form, setForm] = useState<OverrideForm>({
     student_id: record.student_id ?? "",
     date: new Date().toISOString().split("T")[0],
+    time_in: record.time_in ? record.time_in.substring(11, 16) : "",
     status: record.status ?? "present",
     notes: "",
   });
@@ -64,7 +148,7 @@ function OverrideModal({ record, onClose, onSuccess }: OverrideModalProps) {
     setLoading(true);
     setError("");
     try {
-      await api.overrideAttendance(form);
+      await api.overrideAttendance({ ...form, time_in: form.time_in || undefined });
       onSuccess();
       onClose();
     } catch (err) {
@@ -105,6 +189,12 @@ function OverrideModal({ record, onClose, onSuccess }: OverrideModalProps) {
               className="w-full px-3 py-2 rounded-lg text-sm" style={inputStyle} />
           </div>
           <div>
+            <label className="block text-xs font-medium mb-1" style={{ color: "var(--text-secondary)" }}>Time In</label>
+            <input type="time" value={form.time_in}
+              onChange={(e) => setForm({ ...form, time_in: e.target.value })}
+              className="w-full px-3 py-2 rounded-lg text-sm" style={inputStyle} />
+          </div>
+          <div>
             <label className="block text-xs font-medium mb-1" style={{ color: "var(--text-secondary)" }}>Status</label>
             <select value={form.status}
               onChange={(e) => setForm({ ...form, status: e.target.value })}
@@ -139,6 +229,7 @@ function OverrideModal({ record, onClose, onSuccess }: OverrideModalProps) {
 }
 
 export default function DashboardPage() {
+  const [selectedDate, setSelectedDate] = useState(todayIso);
   const [records, setRecords] = useState<AttendanceRecord[]>([]);
   const [stats, setStats] = useState<Stats>({ total: 0, present: 0, late: 0, totalStudents: 0 });
   const [connected, setConnected] = useState(false);
@@ -147,12 +238,29 @@ export default function DashboardPage() {
   const gatewayPollRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const [lastUpdate, setLastUpdate] = useState<WsAttendanceUpdate | null>(null);
   const [overrideRecord, setOverrideRecord] = useState<AttendanceRecord | null>(null);
+  const [showClearConfirm, setShowClearConfirm] = useState(false);
   const [clearing, setClearing] = useState(false);
+  const [clearError, setClearError] = useState("");
   const wsRef = useRef<WebSocket | null>(null);
   const reconnectRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
+  const isToday = selectedDate === todayIso();
+
+  const fetchAttendanceForDate = useCallback(async (date: string) => {
+    try {
+      const data = await api.getAttendanceByDate(date);
+      setRecords(data);
+      computeStats(data);
+    } catch (e) {
+      console.error("Failed to fetch attendance:", e);
+    }
+  }, []);
+
   useEffect(() => {
-    fetchTodayAttendance();
+    fetchAttendanceForDate(selectedDate);
+  }, [selectedDate, fetchAttendanceForDate]);
+
+  useEffect(() => {
     fetchTotalStudents();
     connectWebSocket();
     pollGatewayStatus();
@@ -179,16 +287,6 @@ export default function DashboardPage() {
     } catch (_) {}
   }
 
-  async function fetchTodayAttendance() {
-    try {
-      const data = await api.getTodayAttendance();
-      setRecords(data);
-      computeStats(data);
-    } catch (e) {
-      console.error("Failed to fetch attendance:", e);
-    }
-  }
-
   async function fetchTotalStudents() {
     try {
       const students = await api.getStudents();
@@ -196,23 +294,21 @@ export default function DashboardPage() {
     } catch (_) {}
   }
 
-  async function handleClearAttendance() {
-    const today = new Date().toISOString().split("T")[0];
-    if (!window.confirm(`[DEV] Delete all attendance records for ${today}? This cannot be undone.`)) return;
+  async function handleClearConfirmed() {
+    setClearError("");
     setClearing(true);
     try {
       const BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
       const token = localStorage.getItem("admin_token");
-      const res = await fetch(`${BASE}/api/attendance/?date=${today}`, {
+      const res = await fetch(`${BASE}/api/attendance/?date=${selectedDate}`, {
         method: "DELETE",
         headers: token ? { Authorization: `Bearer ${token}` } : {},
       });
       if (!res.ok) throw new Error("Clear failed");
-      const { deleted } = await res.json() as { deleted: number };
-      alert(`Cleared ${deleted} record(s).`);
-      await fetchTodayAttendance();
+      setShowClearConfirm(false);
+      await fetchAttendanceForDate(selectedDate);
     } catch (e) {
-      alert(e instanceof Error ? e.message : "Clear failed");
+      setClearError(e instanceof Error ? e.message : "Clear failed");
     } finally {
       setClearing(false);
     }
@@ -242,19 +338,25 @@ export default function DashboardPage() {
         const data = JSON.parse(event.data) as WsAttendanceUpdate;
         if (data.type === "attendance_update" && !data.already_marked) {
           setLastUpdate(data);
-          setRecords((prev) => {
-            const newRecord: AttendanceRecord = {
-              id: crypto.randomUUID(),
-              student_id: data.student_id,
-              student_name: data.student_name,
-              time_in: new Date().toISOString(),
-              date: new Date().toISOString().split("T")[0],
-              status: data.status,
-              confidence_score: data.confidence,
-            };
-            const updated = [newRecord, ...prev];
-            computeStats(updated);
-            return updated;
+          // only inject live record into table when viewing today
+          setSelectedDate((cur) => {
+            if (cur === todayIso()) {
+              setRecords((prev) => {
+                const newRecord: AttendanceRecord = {
+                  id: crypto.randomUUID(),
+                  student_id: data.student_id,
+                  student_name: data.student_name,
+                  time_in: new Date().toISOString(),
+                  date: new Date().toISOString().split("T")[0],
+                  status: data.status,
+                  confidence_score: data.confidence,
+                };
+                const updated = [newRecord, ...prev];
+                computeStats(updated);
+                return updated;
+              });
+            }
+            return cur;
           });
         }
       } catch (_) {}
@@ -263,7 +365,7 @@ export default function DashboardPage() {
 
   const statCards = [
     { label: "Enrolled Students", value: stats.totalStudents, color: "text-green-400" },
-    { label: "Total Scanned Today", value: stats.total, color: "text-white" },
+    { label: isToday ? "Total Scanned Today" : "Total Scanned", value: stats.total, color: "" },
     { label: "Present", value: stats.present, color: "text-emerald-400" },
     { label: "Late", value: stats.late, color: "text-amber-400" },
   ];
@@ -272,11 +374,47 @@ export default function DashboardPage() {
     <div className="p-8 w-full">
       <div className="mb-8 flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-semibold" style={{ color: "var(--text-primary)" }}>
-            {new Date().toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" })}
-          </h1>
-          <p className="text-sm mt-1" style={{ color: "var(--text-secondary)" }}>
-            Real-time attendance via gateway camera
+          {/* Date navigation */}
+          <div className="flex items-center gap-2 mb-1">
+            <button
+              onClick={() => setSelectedDate((d) => shiftDate(d, -1))}
+              className="w-7 h-7 rounded-lg flex items-center justify-center text-sm transition-colors"
+              style={{ background: "var(--bg-surface)", color: "var(--text-secondary)", border: "1px solid var(--border)" }}
+              onMouseEnter={(e) => (e.currentTarget.style.color = "var(--text-primary)")}
+              onMouseLeave={(e) => (e.currentTarget.style.color = "var(--text-secondary)")}
+            >
+              ‹
+            </button>
+            <h1 className="text-2xl font-semibold" style={{ color: "var(--text-primary)" }}>
+              {formatDateLabel(selectedDate)}
+            </h1>
+            <button
+              onClick={() => setSelectedDate((d) => shiftDate(d, 1))}
+              disabled={isToday}
+              className="w-7 h-7 rounded-lg flex items-center justify-center text-sm transition-colors"
+              style={{
+                background: "var(--bg-surface)",
+                color: isToday ? "var(--border)" : "var(--text-secondary)",
+                border: "1px solid var(--border)",
+                cursor: isToday ? "not-allowed" : "pointer",
+              }}
+              onMouseEnter={(e) => { if (!isToday) e.currentTarget.style.color = "var(--text-primary)"; }}
+              onMouseLeave={(e) => { if (!isToday) e.currentTarget.style.color = "var(--text-secondary)"; }}
+            >
+              ›
+            </button>
+            {!isToday && (
+              <button
+                onClick={() => setSelectedDate(todayIso())}
+                className="ml-1 text-xs px-2 py-1 rounded-md"
+                style={{ color: "var(--accent)", background: "#1DB95415" }}
+              >
+                Today
+              </button>
+            )}
+          </div>
+          <p className="text-sm" style={{ color: "var(--text-secondary)" }}>
+            {isToday ? "Real-time attendance via gateway camera" : "Historical attendance records"}
           </p>
         </div>
         <div className="flex items-center gap-4 text-sm">
@@ -298,18 +436,18 @@ export default function DashboardPage() {
       <div className="grid grid-cols-4 gap-4 mb-8">
         {statCards.map((s) => (
           <div key={s.label} className="rounded-xl p-5" style={{ background: "var(--bg-card)", border: "1px solid var(--border)" }}>
-            <div className={`text-3xl font-bold ${s.color}`}>{s.value}</div>
+            <div className={`text-3xl font-bold ${s.color}`} style={!s.color ? { color: "var(--text-primary)" } : undefined}>{s.value}</div>
             <div className="text-sm mt-1" style={{ color: "var(--text-secondary)" }}>{s.label}</div>
           </div>
         ))}
       </div>
 
-      {lastUpdate && (
+      {lastUpdate && isToday && (
         <div className="mb-6 rounded-xl px-5 py-3 flex items-center gap-3 text-sm"
           style={{ background: "#22c55e15", border: "1px solid #22c55e30" }}>
           <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
           <span className="font-medium text-emerald-300">{lastUpdate.student_name}</span>
-          <span style={{ color: "var(--text-secondary)" }}>just scanned in —</span>
+          <span style={{ color: "var(--text-secondary)" }}>just scanned in</span>
           <StatusBadge status={lastUpdate.status} />
           <span className="ml-auto text-xs" style={{ color: "var(--text-secondary)" }}>
             {(lastUpdate.confidence * 100).toFixed(0)}% confidence
@@ -319,19 +457,26 @@ export default function DashboardPage() {
 
       <div className="rounded-xl overflow-hidden" style={{ background: "var(--bg-card)", border: "1px solid var(--border)" }}>
         <div className="px-6 py-4 flex items-center justify-between" style={{ borderBottom: "1px solid var(--border)" }}>
-          <span className="font-medium" style={{ color: "var(--text-primary)" }}>Today&apos;s Attendance</span>
+          <span className="font-medium" style={{ color: "var(--text-primary)" }}>
+            {isToday ? "Today's Attendance" : `Attendance - ${formatDateLabel(selectedDate)}`}
+          </span>
           <div className="flex items-center gap-3">
-            <button onClick={fetchTodayAttendance} className="text-xs transition-colors" style={{ color: "var(--text-secondary)" }}>
+            <button
+              onClick={() => fetchAttendanceForDate(selectedDate)}
+              className="text-xs transition-colors"
+              style={{ color: "var(--text-secondary)" }}
+            >
               Refresh
             </button>
-            <button
-              onClick={handleClearAttendance}
-              disabled={clearing}
-              className="text-xs px-2.5 py-1 rounded-md font-medium transition-colors"
-              style={{ background: "#7f1d1d30", border: "1px solid #ef444440", color: "#fca5a5" }}
-            >
-              {clearing ? "Clearing..." : "Clear (Dev)"}
-            </button>
+            {isToday && (
+              <button
+                onClick={() => { setClearError(""); setShowClearConfirm(true); }}
+                className="text-xs px-2.5 py-1 rounded-md font-medium transition-colors"
+                style={{ background: "#7f1d1d30", border: "1px solid #ef444440", color: "#fca5a5" }}
+              >
+                Clear (Dev)
+              </button>
+            )}
           </div>
         </div>
         <table className="w-full text-sm">
@@ -349,7 +494,7 @@ export default function DashboardPage() {
             {records.length === 0 ? (
               <tr>
                 <td colSpan={6} className="px-6 py-12 text-center" style={{ color: "var(--text-secondary)" }}>
-                  No attendance records yet today.
+                  No attendance records for this date.
                 </td>
               </tr>
             ) : (
@@ -382,11 +527,21 @@ export default function DashboardPage() {
         </table>
       </div>
 
+      {showClearConfirm && (
+        <ClearConfirmModal
+          date={selectedDate}
+          clearing={clearing}
+          error={clearError}
+          onConfirm={handleClearConfirmed}
+          onClose={() => setShowClearConfirm(false)}
+        />
+      )}
+
       {overrideRecord && (
         <OverrideModal
           record={overrideRecord}
           onClose={() => setOverrideRecord(null)}
-          onSuccess={fetchTodayAttendance}
+          onSuccess={() => fetchAttendanceForDate(selectedDate)}
         />
       )}
     </div>

@@ -1,11 +1,11 @@
-# AttendEase — Local Setup Guide (Windows)
+# AttendEase - Local Setup Guide (Windows)
 
 > Step-by-step guide to run AttendEase on your own Windows machine after cloning from GitHub.
 > No Docker, no cmake, no Visual Studio Build Tools required.
 
 ---
 
-## Step 1 — Install Required Software
+## Step 1 - Install Required Software
 
 Install these in order. Do not skip any.
 
@@ -16,7 +16,7 @@ Use all default settings during installation.
 
 ---
 
-### 2. Python 3.11.9 (exact version — do not use 3.12, 3.13, or 3.14)
+### 2. Python 3.11.9 (exact version - do not use 3.12, 3.13, or 3.14)
 
 > Why 3.11 specifically? The face recognition library uses `dlib-bin`, which only has a pre-built Windows binary for Python 3.11. Any other version will fail.
 
@@ -29,7 +29,7 @@ During installation:
 - **Check "Add Python 3.11 to PATH"** ← very important, do not skip this
 - Click "Install Now"
 
-Verify after install — open Command Prompt and run:
+Verify after install - open Command Prompt and run:
 ```
 python --version
 ```
@@ -65,21 +65,21 @@ pnpm --version
 
 ---
 
-## Step 2 — Get a Free Database
+## Step 2 - Get a Free Database
 
 AttendEase uses PostgreSQL hosted on NeonTech (free, no credit card needed).
 
 1. Go to https://neon.tech and create a free account.
 2. Create a new **Project** (any name).
-3. On the project dashboard, find **Connection String** — it looks like:
+3. On the project dashboard, find **Connection String** - it looks like:
    ```
    postgresql://user:password@host/dbname?sslmode=require
    ```
-4. Copy it — you will need it in Step 4.
+4. Copy it - you will need it in Step 4.
 
 ---
 
-## Step 3 — Clone the Repository
+## Step 3 - Clone the Repository
 
 Open **Command Prompt** (search "cmd" in Start menu) and run:
 
@@ -90,7 +90,7 @@ cd attendease-v2
 
 ---
 
-## Step 4 — Set Up the Backend
+## Step 4 - Set Up the Backend
 
 All commands below must be run in **Command Prompt** (not PowerShell).
 
@@ -108,7 +108,7 @@ python -m venv venv
 venv\Scripts\activate
 ```
 
-You should see `(venv)` appear at the start of your prompt. If you don't see it, the venv is not active — do not continue until it shows.
+You should see `(venv)` appear at the start of your prompt. If you don't see it, the venv is not active - do not continue until it shows.
 
 **Double-check you are on Python 3.11:**
 ```
@@ -189,7 +189,7 @@ Leave this Command Prompt window open. The backend is now running at `http://loc
 
 ---
 
-## Step 5 — Set Up the Frontend
+## Step 5 - Set Up the Frontend
 
 Open a **second Command Prompt** window (keep the backend running in the first one).
 
@@ -203,7 +203,7 @@ cd attendease-v2\frontend
 copy .env.example .env.local
 ```
 
-No changes needed — the default values already point to `localhost:8000`.
+No changes needed - the default values already point to `localhost:8000`.
 
 **Install frontend dependencies:**
 ```
@@ -219,7 +219,7 @@ The frontend is now running at `http://localhost:3000`.
 
 ---
 
-## Step 6 — Open the App
+## Step 6 - Open the App
 
 Open your browser and go to:
 
@@ -236,14 +236,14 @@ Open your browser and go to:
 
 You do not need to reinstall anything. Just:
 
-**Terminal 1 — Backend:**
+**Terminal 1 - Backend:**
 ```
 cd attendease-v2\backend
 venv\Scripts\activate
 uvicorn app.main:app --reload
 ```
 
-**Terminal 2 — Frontend:**
+**Terminal 2 - Frontend:**
 ```
 cd attendease-v2\frontend
 pnpm dev
@@ -266,10 +266,10 @@ pnpm dev
 → The virtual environment is not active. Run `venv\Scripts\activate` first.
 
 **Error about dlib / face_recognition during install**
-→ You are likely using the wrong Python version. Run `python --version` — it must be `3.11.x`. If it says 3.12 or higher, you need to install Python 3.11.9 and create the venv again.
+→ You are likely using the wrong Python version. Run `python --version` - it must be `3.11.x`. If it says 3.12 or higher, you need to install Python 3.11.9 and create the venv again.
 
 **"Could not connect to database" or alembic errors**
 → Your `DATABASE_URL` in `.env` is incorrect. Go back to NeonTech and copy the connection string again. Make sure it ends with `?sslmode=require`.
 
 **Frontend shows blank page or API errors**
-→ Make sure the backend is running in the other terminal window. Check `http://localhost:8000/health` — it should return `{"status": "ok"}`.
+→ Make sure the backend is running in the other terminal window. Check `http://localhost:8000/health` - it should return `{"status": "ok"}`.

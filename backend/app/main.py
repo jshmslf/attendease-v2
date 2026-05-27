@@ -5,9 +5,10 @@ from fastapi.staticfiles import StaticFiles
 from contextlib import asynccontextmanager
 
 from app.core.config import settings
-from app.db.session import engine
+from app.db.session import engine, Base
 from app.db import base  # noqa: F401 - imports all models for SQLAlchemy
-from app.api.routes import auth, students, attendance, camera, notifications, messages
+from app.api.routes import auth, students, attendance, camera, notifications, messages, subjects, sections
+from app.api.routes import settings as settings_router
 
 
 # Create storage directory at import time so StaticFiles mount succeeds
@@ -17,6 +18,8 @@ os.makedirs("static", exist_ok=True)
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    async with engine.begin() as conn:
+        await conn.run_sync(Base.metadata.create_all)
     print(f"AttendEase API starting up... Face storage: {settings.LOCAL_STORAGE_PATH}")
     yield
     print("AttendEase API shutting down...")
@@ -46,6 +49,9 @@ app.include_router(attendance.router, prefix="/api/attendance", tags=["attendanc
 app.include_router(camera.router, prefix="/api/camera", tags=["camera"])
 app.include_router(notifications.router, prefix="/api/notifications", tags=["notifications"])
 app.include_router(messages.router, prefix="/api/messages", tags=["messages"])
+app.include_router(subjects.router, prefix="/api/subjects", tags=["subjects"])
+app.include_router(sections.router, prefix="/api/sections", tags=["sections"])
+app.include_router(settings_router.router, prefix="/api/settings", tags=["settings"])
 
 
 @app.get("/health")

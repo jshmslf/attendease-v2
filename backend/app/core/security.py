@@ -16,7 +16,7 @@ pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 bearer_scheme = HTTPBearer()
 api_key_header = APIKeyHeader(name="X-Camera-API-Key", auto_error=False)
 
-# Hardcoded camera API key for thesis — move to DB/env in production
+# Hardcoded camera API key for thesis - move to DB/env in production
 CAMERA_API_KEY = "attendease-camera-secret-key"
 
 

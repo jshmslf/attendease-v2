@@ -10,6 +10,7 @@ passlib[bcrypt]==1.7.4
 bcrypt==4.0.1
 python-multipart==0.0.12
 aiofiles==24.1.0
+httpx==0.28.1
 
 # Face Recognition (face-recognition itself is installed in Dockerfile to avoid dlib compilation)
 opencv-python-headless==4.10.0.84

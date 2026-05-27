@@ -1,8 +1,9 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
-import { AttendanceData, AttendanceSummary, AttendanceRecord, StudentResponse, ParentInfo } from "@/lib/api";
+import { AttendanceData, AttendanceSummary, AttendanceRecord, StudentResponse, ParentInfo, Subject } from "@/lib/api";
+import { useTheme } from "../context/ThemeContext";
 
 const BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
 
@@ -31,7 +32,7 @@ const MONTHS = [
 
 function AttendanceBar({ rate }: { rate: number }) {
   return (
-    <div className="w-full bg-slate-100 rounded-full h-2 mt-2">
+    <div className="w-full rounded-full h-2 mt-2" style={{ background: "var(--bg-surface)" }}>
       <div
         className={`h-2 rounded-full transition-all duration-700 ${
           rate >= 90 ? "bg-emerald-400" : rate >= 75 ? "bg-amber-400" : "bg-red-400"
@@ -53,6 +54,7 @@ function StatusDot({ status }: { status: string }) {
 
 export default function PortalPage() {
   const router = useRouter();
+  const { theme, toggle } = useTheme();
   const [data, setData] = useState<AttendanceData | null>(null);
   const [loading, setLoading] = useState(true);
   const [month, setMonth] = useState(0);
@@ -60,12 +62,41 @@ export default function PortalPage() {
 
   const [profile, setProfile] = useState<StudentResponse | null>(null);
   const [myParents, setMyParents] = useState<ParentInfo[]>([]);
+  const [mySubjects, setMySubjects] = useState<Subject[]>([]);
 
   const [msgOpen, setMsgOpen] = useState(false);
   const [msgBody, setMsgBody] = useState("");
   const [msgLoading, setMsgLoading] = useState(false);
   const [msgError, setMsgError] = useState("");
   const [msgSuccess, setMsgSuccess] = useState(false);
+
+  const [calTooltip, setCalTooltip] = useState<{
+    code: string; name: string; teacher: string; room?: string;
+    start_time: string; end_time?: string; day: number;
+    x: number; y: number; onRight: boolean;
+  } | null>(null);
+  const tooltipHideTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  function scheduleHideTooltip() {
+    tooltipHideTimer.current = setTimeout(() => setCalTooltip(null), 120);
+  }
+  function cancelHideTooltip() {
+    if (tooltipHideTimer.current) clearTimeout(tooltipHideTimer.current);
+  }
+  function showTooltip(e: React.MouseEvent<HTMLDivElement>, entry: {
+    code: string; name: string; teacher: string; room?: string;
+    start_time: string; end_time?: string; day: number;
+  }) {
+    cancelHideTooltip();
+    const rect = e.currentTarget.getBoundingClientRect();
+    const onRight = rect.right + 220 > window.innerWidth;
+    setCalTooltip({
+      ...entry,
+      x: onRight ? rect.left - 212 : rect.right + 8,
+      y: Math.min(rect.top, window.innerHeight - 180),
+      onRight,
+    });
+  }
 
   useEffect(() => {
     const token = localStorage.getItem("student_token");
@@ -79,9 +110,10 @@ export default function PortalPage() {
   }, [month, year]);
 
   async function fetchProfile() {
-    const [profileResult, parentsResult] = await Promise.allSettled([
+    const [profileResult, parentsResult, subjectsResult] = await Promise.allSettled([
       studentFetch<StudentResponse>("/api/students/me"),
       studentFetch<ParentInfo[]>("/api/students/me/parents"),
+      studentFetch<Subject[]>("/api/subjects/my"),
     ]);
     if (profileResult.status === "fulfilled") {
       setProfile(profileResult.value);
@@ -92,6 +124,11 @@ export default function PortalPage() {
       setMyParents(parentsResult.value);
     } else {
       console.error("parents fetch failed", parentsResult.reason);
+    }
+    if (subjectsResult.status === "fulfilled") {
+      setMySubjects(subjectsResult.value);
+    } else {
+      console.error("subjects fetch failed", subjectsResult.reason);
     }
   }
 
@@ -149,60 +186,103 @@ export default function PortalPage() {
   const records: AttendanceRecord[] = data?.records ?? [];
 
   return (
-    <div className="min-h-screen" style={{ background: "#f8f7f4" }}>
-      <header className="bg-white border-b border-slate-200 px-6 py-4 flex items-center gap-3">
-        <img src="/logo/logo-1x1-black.png" alt="AttendEase" className="w-8 h-8 rounded-lg object-contain" />
-        <span className="font-semibold text-slate-800">AttendEase</span>
-        <span className="text-slate-300 mx-1">·</span>
-        <span className="text-slate-500 text-sm">My Attendance</span>
-        <div className="ml-auto">
+    <div className="min-h-screen" style={{ background: "var(--bg-dark)" }}>
+      <header
+        className="px-6 py-4 flex items-center gap-3"
+        style={{ background: "var(--bg-card)", borderBottom: "1px solid var(--border)" }}
+      >
+        <img
+          src={theme === "dark" ? "/logo/logo-1x1.png" : "/logo/logo-1x1-black.png"}
+          alt="AttendEase"
+          className="w-8 h-8 rounded-lg object-contain"
+        />
+        <span className="font-semibold" style={{ color: "var(--text-primary)" }}>AttendEase</span>
+        <span className="mx-1" style={{ color: "var(--text-secondary)" }}>·</span>
+        <span className="text-sm" style={{ color: "var(--text-secondary)" }}>My Attendance</span>
+        <div className="ml-auto flex items-center gap-3">
+          <button
+            onClick={toggle}
+            title={theme === "dark" ? "Switch to light mode" : "Switch to dark mode"}
+            className="p-2 rounded-lg transition-colors"
+            style={{ color: "var(--text-secondary)" }}
+            onMouseEnter={(e) => (e.currentTarget.style.color = "var(--text-primary)")}
+            onMouseLeave={(e) => (e.currentTarget.style.color = "var(--text-secondary)")}
+          >
+            {theme === "dark" ? (
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
+                  d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364-6.364l-.707.707M6.343 17.657l-.707.707M17.657 17.657l-.707-.707M6.343 6.343l-.707-.707M16 12a4 4 0 11-8 0 4 4 0 018 0z" />
+              </svg>
+            ) : (
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
+                  d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z" />
+              </svg>
+            )}
+          </button>
           <button
             onClick={handleLogout}
-            className="text-sm text-slate-400 hover:text-slate-600 transition-colors"
+            className="text-sm transition-colors"
+            style={{ color: "var(--text-secondary)" }}
+            onMouseEnter={(e) => (e.currentTarget.style.color = "var(--text-primary)")}
+            onMouseLeave={(e) => (e.currentTarget.style.color = "var(--text-secondary)")}
           >
             Logout
           </button>
         </div>
       </header>
 
-      <main className="max-w-2xl mx-auto px-6 py-8">
+      <main className="max-w-5xl mx-auto px-6 py-8">
 
         {/* Profile Card */}
-        <div className="bg-white rounded-2xl shadow-sm border border-slate-100 mb-6 overflow-hidden">
+        <div
+          className="rounded-2xl shadow-sm mb-6 overflow-hidden"
+          style={{ background: "var(--bg-card)", border: "1px solid var(--border)" }}
+        >
           <div className="px-6 py-5">
             {profile ? (
               <>
-                <h2 className="text-lg font-semibold text-slate-800">
+                <h2 className="text-lg font-semibold" style={{ color: "var(--text-primary)" }}>
                   {profile.first_name} {profile.last_name}
                 </h2>
-                <p className="text-sm text-slate-500 mt-0.5">
+                <p className="text-sm mt-0.5" style={{ color: "var(--text-secondary)" }}>
                   {profile.student_id} · {profile.course} · Year {profile.year_level}
                 </p>
-                <p className="text-sm text-slate-500 mt-0.5">{profile.email}</p>
+                {profile.section_name && (
+                  <p className="text-sm mt-0.5" style={{ color: "var(--text-secondary)" }}>
+                    Section: <span style={{ color: "var(--text-primary)" }}>{profile.section_name}</span>
+                  </p>
+                )}
+                <p className="text-sm mt-0.5" style={{ color: "var(--text-secondary)" }}>{profile.email}</p>
               </>
             ) : (
               <div className="space-y-1.5">
-                <div className="h-4 w-40 bg-slate-100 rounded animate-pulse" />
-                <div className="h-3 w-56 bg-slate-100 rounded animate-pulse" />
+                <div className="h-4 w-40 rounded animate-pulse" style={{ background: "var(--bg-surface)" }} />
+                <div className="h-3 w-56 rounded animate-pulse" style={{ background: "var(--bg-surface)" }} />
               </div>
             )}
           </div>
 
           {/* Parent / Guardian section */}
-          <div className="border-t border-slate-100 px-6 py-4">
-            <p className="text-xs font-semibold text-slate-400 uppercase tracking-wide mb-3">Parent / Guardian</p>
+          <div className="px-6 py-4" style={{ borderTop: "1px solid var(--border)" }}>
+            <p className="text-xs font-semibold uppercase tracking-wide mb-3" style={{ color: "var(--text-secondary)" }}>
+              Parent / Guardian
+            </p>
             {myParents.length === 0 ? (
-              <p className="text-sm text-slate-400">No parent contact on record.</p>
+              <p className="text-sm" style={{ color: "var(--text-secondary)" }}>No parent contact on record.</p>
             ) : (
               <ul className="space-y-3">
                 {myParents.map((p) => (
                   <li key={p.id} className="flex items-start gap-3">
-                    <div className="w-8 h-8 rounded-full bg-slate-100 flex items-center justify-center text-slate-500 text-xs font-bold shrink-0">
+                    <div
+                      className="w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold shrink-0"
+                      style={{ background: "var(--bg-surface)", color: "var(--text-secondary)" }}
+                    >
                       {p.name.charAt(0).toUpperCase()}
                     </div>
                     <div>
-                      <p className="text-sm font-medium text-slate-700">{p.name}</p>
-                      <p className="text-xs text-slate-400 mt-0.5">
+                      <p className="text-sm font-medium" style={{ color: "var(--text-primary)" }}>{p.name}</p>
+                      <p className="text-xs mt-0.5" style={{ color: "var(--text-secondary)" }}>
                         {p.phone_number} · {p.relationship_to_student}
                       </p>
                     </div>
@@ -211,42 +291,292 @@ export default function PortalPage() {
               </ul>
             )}
           </div>
+
         </div>
+
+        {/* Weekly Timetable - Google Calendar style */}
+        {(() => {
+          const DAYS_FULL = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"];
+          const HOUR_H = 64;
+
+          function parseMin(t: string): number {
+            const [h, m] = t.split(":").map(Number);
+            return h * 60 + (m || 0);
+          }
+
+          function fmtHour(h: number): string {
+            const suffix = h >= 12 ? "PM" : "AM";
+            const display = h % 12 === 0 ? 12 : h % 12;
+            return `${display}${suffix}`;
+          }
+
+          const allEntries = mySubjects.flatMap((subj) =>
+            subj.schedules.map((sch) => ({ ...sch, subj }))
+          );
+          const activeDays = [...new Set(allEntries.map((e) => e.day_of_week))].sort((a, b) => a - b);
+
+          const allStarts = allEntries.map((e) => parseMin(e.start_time));
+          const allEnds = allEntries.map((e) =>
+            e.end_time ? parseMin(e.end_time) : parseMin(e.start_time) + 60
+          );
+          const START_HOUR = allEntries.length ? Math.floor(Math.min(...allStarts) / 60) : 7;
+          const END_HOUR = allEntries.length ? Math.ceil(Math.max(...allEnds) / 60) : 18;
+          const hours = Array.from({ length: END_HOUR - START_HOUR }, (_, i) => START_HOUR + i);
+          const gridHeight = (END_HOUR - START_HOUR) * HOUR_H;
+
+          return (
+            <div
+              className="rounded-2xl shadow-sm mb-6 overflow-hidden"
+              style={{ background: "var(--bg-card)", border: "1px solid var(--border)" }}
+            >
+              <div className="px-6 py-4" style={{ borderBottom: "1px solid var(--border)" }}>
+                <h3 className="font-semibold text-sm" style={{ color: "var(--text-primary)" }}>My Schedule</h3>
+              </div>
+
+              {allEntries.length === 0 ? (
+                <div className="px-6 py-8 text-center text-sm" style={{ color: "var(--text-secondary)" }}>
+                  No subjects assigned yet.
+                </div>
+              ) : (
+                /* Single scroll container — handles both x (wide weeks) and y (tall day) */
+                <div className="cal-scroll" style={{ overflow: "auto", maxHeight: 580 }}>
+                <style>{`
+                  .cal-scroll::-webkit-scrollbar { width: 6px; height: 6px; }
+                  .cal-scroll::-webkit-scrollbar-track { background: transparent; }
+                  .cal-scroll::-webkit-scrollbar-thumb { background: #1DB95450; border-radius: 99px; }
+                  .cal-scroll::-webkit-scrollbar-thumb:hover { background: #1DB954AA; }
+                  .cal-scroll::-webkit-scrollbar-corner { background: transparent; }
+                `}</style>
+                  {/* min-width keeps columns from collapsing on narrow viewports */}
+                  <div style={{ minWidth: 52 + activeDays.length * 130 }}>
+
+                    {/* Sticky day-name header — scrolls with grid horizontally, sticks vertically */}
+                    <div
+                      className="flex"
+                      style={{
+                        position: "sticky",
+                        top: 0,
+                        zIndex: 10,
+                        background: "var(--bg-surface)",
+                        borderBottom: "1px solid var(--border)",
+                      }}
+                    >
+                      <div style={{ width: 52, flexShrink: 0 }} />
+                      {activeDays.map((d) => (
+                        <div
+                          key={d}
+                          className="text-center text-xs font-semibold uppercase tracking-wide py-2"
+                          style={{
+                            flex: 1,
+                            minWidth: 130,
+                            color: "var(--text-primary)",
+                            borderLeft: "1px solid var(--border)",
+                          }}
+                        >
+                          {DAYS_FULL[d]}
+                        </div>
+                      ))}
+                    </div>
+
+                    {/* Grid body */}
+                    <div className="flex" style={{ height: gridHeight }}>
+
+                      {/* Time gutter */}
+                      <div style={{ width: 52, flexShrink: 0, position: "relative" }}>
+                        {hours.map((h) => (
+                          <div
+                            key={h}
+                            style={{
+                              position: "absolute",
+                              top: (h - START_HOUR) * HOUR_H + 3,
+                              right: 6,
+                              fontSize: 10,
+                              fontFamily: "monospace",
+                              color: "var(--text-secondary)",
+                              userSelect: "none",
+                              whiteSpace: "nowrap",
+                            }}
+                          >
+                            {fmtHour(h)}
+                          </div>
+                        ))}
+                      </div>
+
+                      {/* Day columns */}
+                      {activeDays.map((d) => {
+                        const dayEntries = allEntries.filter((e) => e.day_of_week === d);
+                        return (
+                          <div
+                            key={d}
+                            style={{
+                              flex: 1,
+                              minWidth: 130,
+                              position: "relative",
+                              borderLeft: "1px solid var(--border)",
+                            }}
+                          >
+                            {/* Hour + half-hour lines */}
+                            {hours.map((h) => (
+                              <div key={h}>
+                                <div style={{
+                                  position: "absolute",
+                                  top: (h - START_HOUR) * HOUR_H,
+                                  left: 0, right: 0,
+                                  borderTop: "1px solid var(--border)",
+                                }} />
+                                <div style={{
+                                  position: "absolute",
+                                  top: (h - START_HOUR) * HOUR_H + HOUR_H / 2,
+                                  left: 0, right: 0,
+                                  borderTop: "1px dashed var(--border)",
+                                  opacity: 0.4,
+                                }} />
+                              </div>
+                            ))}
+                            {/* Bottom border */}
+                            <div style={{
+                              position: "absolute",
+                              top: gridHeight,
+                              left: 0, right: 0,
+                              borderTop: "1px solid var(--border)",
+                            }} />
+
+                            {/* Subject blocks */}
+                            {dayEntries.map((e) => {
+                              const startMin = parseMin(e.start_time);
+                              const durMin = e.end_time
+                                ? parseMin(e.end_time) - startMin
+                                : 60;
+                              const topPx = ((startMin - START_HOUR * 60) / 60) * HOUR_H;
+                              const heightPx = Math.max((durMin / 60) * HOUR_H, 30);
+                              const isActive = calTooltip?.code === e.subj.subject_code &&
+                                calTooltip?.day === e.day_of_week &&
+                                calTooltip?.start_time === e.start_time;
+                              return (
+                                <div
+                                  key={e.subj.id + e.start_time}
+                                  onClick={(ev) => {
+                                    ev.stopPropagation();
+                                    if (isActive) { setCalTooltip(null); return; }
+                                    showTooltip(ev, {
+                                      code: e.subj.subject_code, name: e.subj.name,
+                                      teacher: e.subj.teacher, room: e.room,
+                                      start_time: e.start_time, end_time: e.end_time,
+                                      day: e.day_of_week,
+                                    });
+                                  }}
+                                  onMouseEnter={(ev) => showTooltip(ev, {
+                                    code: e.subj.subject_code, name: e.subj.name,
+                                    teacher: e.subj.teacher, room: e.room,
+                                    start_time: e.start_time, end_time: e.end_time,
+                                    day: e.day_of_week,
+                                  })}
+                                  onMouseLeave={scheduleHideTooltip}
+                                  style={{
+                                    position: "absolute",
+                                    top: topPx + 2,
+                                    height: heightPx - 4,
+                                    left: 4,
+                                    right: 4,
+                                    background: isActive ? "#1DB95435" : "#1DB95420",
+                                    border: "1px solid #1DB95450",
+                                    borderLeft: "3px solid var(--accent)",
+                                    borderRadius: 6,
+                                    padding: "4px 8px",
+                                    overflow: "hidden",
+                                    boxSizing: "border-box",
+                                    cursor: "pointer",
+                                    transition: "background 0.15s",
+                                  }}
+                                >
+                                  <div style={{ fontSize: 10, fontWeight: 700, color: "var(--accent)", lineHeight: 1.2 }}>
+                                    {e.subj.subject_code}
+                                  </div>
+                                  <div style={{ fontSize: 11, fontWeight: 600, color: "var(--text-primary)", lineHeight: 1.3, marginTop: 1 }}>
+                                    {e.subj.name}
+                                  </div>
+                                  {heightPx > 50 && (
+                                    <div style={{ fontSize: 10, color: "var(--text-secondary)", marginTop: 2, lineHeight: 1.3 }}>
+                                      {e.subj.teacher}{e.room ? ` · ${e.room}` : ""}
+                                    </div>
+                                  )}
+                                  {heightPx > 64 && (
+                                    <div style={{ fontSize: 10, fontFamily: "monospace", color: "var(--text-secondary)", marginTop: 1, opacity: 0.75 }}>
+                                      {e.start_time}{e.end_time ? `–${e.end_time}` : ""}
+                                    </div>
+                                  )}
+                                </div>
+                              );
+                            })}
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                </div>
+              )}
+            </div>
+          );
+        })()}
 
         {/* Filters */}
         <div className="flex gap-3 mb-6">
           <select
             value={month}
             onChange={(e) => setMonth(Number(e.target.value))}
-            className="px-3 py-2 rounded-lg text-sm border border-slate-200 bg-white text-slate-700"
+            className="px-3 py-2 rounded-lg text-sm"
+            style={{
+              background: "var(--bg-card)",
+              border: "1px solid var(--border)",
+              color: "var(--text-primary)",
+              outline: "none",
+            }}
           >
             {MONTHS.map((m, i) => <option key={m} value={i}>{m}</option>)}
           </select>
           <select
             value={year}
             onChange={(e) => setYear(Number(e.target.value))}
-            className="px-3 py-2 rounded-lg text-sm border border-slate-200 bg-white text-slate-700"
+            className="px-3 py-2 rounded-lg text-sm"
+            style={{
+              background: "var(--bg-card)",
+              border: "1px solid var(--border)",
+              color: "var(--text-primary)",
+              outline: "none",
+            }}
           >
             {years.map((y) => <option key={y} value={y}>{y}</option>)}
           </select>
           <button
             onClick={fetchAttendance}
-            className="px-4 py-2 rounded-lg text-sm font-medium bg-white border border-slate-200 text-slate-600 hover:text-slate-800 transition-colors"
+            className="px-4 py-2 rounded-lg text-sm font-medium transition-colors"
+            style={{
+              background: "var(--bg-card)",
+              border: "1px solid var(--border)",
+              color: "var(--text-secondary)",
+            }}
+            onMouseEnter={(e) => (e.currentTarget.style.color = "var(--text-primary)")}
+            onMouseLeave={(e) => (e.currentTarget.style.color = "var(--text-secondary)")}
           >
             Refresh
           </button>
         </div>
 
         {loading ? (
-          <div className="text-center py-16 text-slate-400 text-sm">Loading your attendance...</div>
+          <div className="text-center py-16 text-sm" style={{ color: "var(--text-secondary)" }}>
+            Loading your attendance...
+          </div>
         ) : (
           <>
             {summary && (
-              <div className="bg-white rounded-2xl p-6 shadow-sm border border-slate-100 mb-6">
+              <div
+                className="rounded-2xl p-6 shadow-sm mb-6"
+                style={{ background: "var(--bg-card)", border: "1px solid var(--border)" }}
+              >
                 <div className="flex items-start justify-between mb-4">
                   <div>
-                    <h2 className="font-semibold text-slate-800 text-lg">Attendance Rate</h2>
-                    <p className="text-slate-400 text-sm">
+                    <h2 className="font-semibold text-lg" style={{ color: "var(--text-primary)" }}>Attendance Rate</h2>
+                    <p className="text-sm" style={{ color: "var(--text-secondary)" }}>
                       {month === 0 ? `Year ${year}` : `${MONTHS[month]} ${year}`}
                     </p>
                   </div>
@@ -265,36 +595,52 @@ export default function PortalPage() {
                     { label: "Late", value: summary.late, color: "text-amber-600" },
                     { label: "Absent", value: summary.absent, color: "text-red-500" },
                   ] as const).map((s) => (
-                    <div key={s.label} className="text-center p-3 bg-slate-50 rounded-xl">
+                    <div
+                      key={s.label}
+                      className="text-center p-3 rounded-xl"
+                      style={{ background: "var(--bg-surface)" }}
+                    >
                       <div className={`text-2xl font-bold ${s.color}`}>{s.value}</div>
-                      <div className="text-slate-400 text-xs mt-0.5">{s.label}</div>
+                      <div className="text-xs mt-0.5" style={{ color: "var(--text-secondary)" }}>{s.label}</div>
                     </div>
                   ))}
                 </div>
               </div>
             )}
 
-            <div className="bg-white rounded-2xl shadow-sm border border-slate-100 overflow-hidden">
-              <div className="px-6 py-4 border-b border-slate-100 flex items-center justify-between">
-                <h3 className="font-semibold text-slate-800">Attendance Records</h3>
-                <span className="text-xs text-slate-400">{records.length} record{records.length !== 1 ? "s" : ""}</span>
+            <div
+              className="rounded-2xl shadow-sm overflow-hidden"
+              style={{ background: "var(--bg-card)", border: "1px solid var(--border)" }}
+            >
+              <div
+                className="px-6 py-4 flex items-center justify-between"
+                style={{ borderBottom: "1px solid var(--border)" }}
+              >
+                <h3 className="font-semibold" style={{ color: "var(--text-primary)" }}>Attendance Records</h3>
+                <span className="text-xs" style={{ color: "var(--text-secondary)" }}>
+                  {records.length} record{records.length !== 1 ? "s" : ""}
+                </span>
               </div>
               {records.length === 0 ? (
-                <div className="px-6 py-12 text-center text-slate-400 text-sm">
+                <div className="px-6 py-12 text-center text-sm" style={{ color: "var(--text-secondary)" }}>
                   No attendance records found for this period.
                 </div>
               ) : (
-                <ul className="divide-y divide-slate-100">
+                <ul>
                   {records.map((r) => (
-                    <li key={r.id} className="px-6 py-4 flex items-center justify-between">
+                    <li
+                      key={r.id}
+                      className="px-6 py-4 flex items-center justify-between"
+                      style={{ borderBottom: "1px solid var(--border)" }}
+                    >
                       <div className="flex items-center gap-3">
                         <StatusDot status={r.status} />
                         <div>
-                          <div className="text-sm font-medium text-slate-700">{r.date}</div>
-                          <div className="text-xs text-slate-400 mt-0.5">Time in: {r.time_in}</div>
+                          <div className="text-sm font-medium" style={{ color: "var(--text-primary)" }}>{r.date}</div>
+                          <div className="text-xs mt-0.5" style={{ color: "var(--text-secondary)" }}>Time in: {r.time_in}</div>
                         </div>
                       </div>
-                      <span className="text-xs font-medium capitalize text-slate-500">{r.status}</span>
+                      <span className="text-xs font-medium capitalize" style={{ color: "var(--text-secondary)" }}>{r.status}</span>
                     </li>
                   ))}
                 </ul>
@@ -303,6 +649,60 @@ export default function PortalPage() {
           </>
         )}
       </main>
+
+      {/* Calendar tooltip */}
+      {calTooltip && (
+        <>
+          <div
+            onMouseEnter={cancelHideTooltip}
+            onMouseLeave={scheduleHideTooltip}
+            style={{
+              position: "fixed",
+              top: calTooltip.y,
+              left: calTooltip.x,
+              zIndex: 50,
+              width: 204,
+              background: "var(--bg-card)",
+              border: "1px solid var(--border)",
+              borderRadius: 10,
+              boxShadow: "0 8px 24px rgba(0,0,0,0.18)",
+              padding: "12px 14px",
+              pointerEvents: "auto",
+            }}
+          >
+            <div style={{ fontSize: 10, fontWeight: 700, color: "var(--accent)", letterSpacing: "0.04em", marginBottom: 4 }}>
+              {calTooltip.code}
+            </div>
+            <div style={{ fontSize: 13, fontWeight: 700, color: "var(--text-primary)", lineHeight: 1.3, marginBottom: 6 }}>
+              {calTooltip.name}
+            </div>
+            <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+              <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ color: "var(--text-secondary)", flexShrink: 0 }}>
+                  <path d="M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2" /><circle cx="12" cy="7" r="4" />
+                </svg>
+                <span style={{ fontSize: 11, color: "var(--text-secondary)" }}>{calTooltip.teacher}</span>
+              </div>
+              {calTooltip.room && (
+                <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ color: "var(--text-secondary)", flexShrink: 0 }}>
+                    <path d="M3 9l9-7 9 7v11a2 2 0 01-2 2H5a2 2 0 01-2-2z" /><polyline points="9 22 9 12 15 12 15 22" />
+                  </svg>
+                  <span style={{ fontSize: 11, color: "var(--text-secondary)" }}>{calTooltip.room}</span>
+                </div>
+              )}
+              <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ color: "var(--text-secondary)", flexShrink: 0 }}>
+                  <circle cx="12" cy="12" r="10" /><polyline points="12 6 12 12 16 14" />
+                </svg>
+                <span style={{ fontSize: 11, fontFamily: "monospace", color: "var(--text-secondary)" }}>
+                  {calTooltip.start_time}{calTooltip.end_time ? ` – ${calTooltip.end_time}` : ""}
+                </span>
+              </div>
+            </div>
+          </div>
+        </>
+      )}
 
       {/* Floating Contact Admin button */}
       <button
@@ -322,14 +722,20 @@ export default function PortalPage() {
         <div className="fixed inset-0 z-50 flex items-end justify-end p-6 pointer-events-none">
           <div
             className="w-full max-w-sm rounded-2xl shadow-2xl overflow-hidden pointer-events-auto"
-            style={{ background: "#fff", border: "1px solid #e2e8f0" }}
+            style={{ background: "var(--bg-card)", border: "1px solid var(--border)" }}
           >
-            <div className="px-5 py-4 border-b border-slate-100 flex items-center justify-between">
+            <div className="px-5 py-4 flex items-center justify-between" style={{ borderBottom: "1px solid var(--border)" }}>
               <div>
-                <h3 className="font-semibold text-slate-800 text-sm">Contact Admin</h3>
-                <p className="text-xs text-slate-400 mt-0.5">Send a support message</p>
+                <h3 className="font-semibold text-sm" style={{ color: "var(--text-primary)" }}>Contact Admin</h3>
+                <p className="text-xs mt-0.5" style={{ color: "var(--text-secondary)" }}>Send a support message</p>
               </div>
-              <button onClick={handleMsgClose} className="text-slate-400 hover:text-slate-600 text-lg leading-none">✕</button>
+              <button
+                onClick={handleMsgClose}
+                className="text-lg leading-none transition-colors"
+                style={{ color: "var(--text-secondary)" }}
+                onMouseEnter={(e) => (e.currentTarget.style.color = "var(--text-primary)")}
+                onMouseLeave={(e) => (e.currentTarget.style.color = "var(--text-secondary)")}
+              >✕</button>
             </div>
             <div className="px-5 py-4">
               {msgSuccess ? (
@@ -339,8 +745,8 @@ export default function PortalPage() {
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
                     </svg>
                   </div>
-                  <p className="text-sm font-medium text-slate-700">Message sent!</p>
-                  <p className="text-xs text-slate-400 mt-1">The admin will get back to you.</p>
+                  <p className="text-sm font-medium" style={{ color: "var(--text-primary)" }}>Message sent!</p>
+                  <p className="text-xs mt-1" style={{ color: "var(--text-secondary)" }}>The admin will get back to you.</p>
                   <button
                     onClick={handleMsgClose}
                     className="mt-4 px-4 py-2 rounded-lg text-sm font-medium text-white"
@@ -363,13 +769,21 @@ export default function PortalPage() {
                     autoFocus
                     onChange={(e) => { setMsgBody(e.target.value); setMsgError(""); }}
                     placeholder="Describe your concern or question..."
-                    className="w-full px-3 py-2 rounded-lg text-sm border border-slate-200 bg-slate-50 text-slate-800 outline-none focus:border-green-400 transition-colors resize-none"
+                    className="w-full px-3 py-2 rounded-lg text-sm outline-none focus:border-green-400 transition-colors resize-none"
+                    style={{
+                      background: "var(--bg-surface)",
+                      border: "1px solid var(--border)",
+                      color: "var(--text-primary)",
+                    }}
                   />
                   <div className="flex gap-2 justify-end">
                     <button
                       type="button"
                       onClick={handleMsgClose}
-                      className="px-4 py-2 rounded-lg text-sm font-medium text-slate-500 hover:text-slate-700 transition-colors"
+                      className="px-4 py-2 rounded-lg text-sm font-medium transition-colors"
+                      style={{ color: "var(--text-secondary)" }}
+                      onMouseEnter={(e) => (e.currentTarget.style.color = "var(--text-primary)")}
+                      onMouseLeave={(e) => (e.currentTarget.style.color = "var(--text-secondary)")}
                     >
                       Cancel
                     </button>

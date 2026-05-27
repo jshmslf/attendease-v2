@@ -7,7 +7,7 @@ from typing import Optional
 import logging
 
 from app.db.session import get_db
-from app.models.models import Attendance, Student
+from app.models.models import Attendance, Student, NotificationLog
 from app.services.attendance_service import get_attendance_summary
 from app.core.security import get_current_admin, get_current_student
 from app.core.timezone import ph_now
@@ -21,6 +21,7 @@ class ManualOverrideRequest(BaseModel):
     date: str            # YYYY-MM-DD
     status: str          # present, late, absent
     notes: Optional[str] = None
+    time_in: Optional[str] = None  # HH:MM - if provided, overrides the recorded time
 
 
 @router.get("/today")
@@ -45,6 +46,46 @@ async def get_today_attendance(
         .order_by(desc(Attendance.time_in))
     )
 
+    rows = result.all()
+    return [
+        {
+            "id": att.id,
+            "student_id": stu.student_id,
+            "student_name": f"{stu.first_name} {stu.last_name}",
+            "course": stu.course,
+            "year_level": stu.year_level,
+            "time_in": att.time_in.isoformat(),
+            "status": att.status,
+            "confidence_score": att.confidence_score,
+            "camera_id": att.camera_id,
+            "is_manual_override": att.is_manual_override,
+        }
+        for att, stu in rows
+    ]
+
+
+@router.get("/by-date")
+async def get_attendance_by_date(
+    date: Optional[str] = Query(None, description="YYYY-MM-DD - omit for today"),
+    db: AsyncSession = Depends(get_db),
+    _: None = Depends(get_current_admin),
+):
+    """Get attendance records for a specific date (admin). Defaults to today (PH time)."""
+    if date:
+        target = datetime.strptime(date, "%Y-%m-%d")
+    else:
+        t = ph_now().date()
+        target = datetime(t.year, t.month, t.day)
+
+    day_start = datetime(target.year, target.month, target.day, 0, 0, 0)
+    day_end = datetime(target.year, target.month, target.day, 23, 59, 59, 999999)
+
+    result = await db.execute(
+        select(Attendance, Student)
+        .join(Student, Attendance.student_id == Student.id)
+        .where(and_(Attendance.date >= day_start, Attendance.date <= day_end))
+        .order_by(desc(Attendance.time_in))
+    )
     rows = result.all()
     return [
         {
@@ -131,15 +172,22 @@ async def manual_override(
     )
     record = existing.scalar_one_or_none()
 
+    corrected_time_in = None
+    if payload.time_in:
+        h, m = map(int, payload.time_in.split(":"))
+        corrected_time_in = datetime(target_date.year, target_date.month, target_date.day, h, m)
+
     if record:
         record.status = payload.status
         record.is_manual_override = True
         record.notes = payload.notes
+        if corrected_time_in:
+            record.time_in = corrected_time_in
     else:
         record = Attendance(
             student_id=student.id,
             date=target_date,
-            time_in=target_date,
+            time_in=corrected_time_in or target_date,
             status=payload.status,
             is_manual_override=True,
             notes=payload.notes,
@@ -152,7 +200,7 @@ async def manual_override(
 
 @router.delete("/")
 async def clear_attendance(
-    date: Optional[str] = Query(None, description="YYYY-MM-DD — clear only this date; omit to clear all"),
+    date: Optional[str] = Query(None, description="YYYY-MM-DD - clear only this date; omit to clear all"),
     db: AsyncSession = Depends(get_db),
     _: None = Depends(get_current_admin),
 ):
@@ -161,11 +209,22 @@ async def clear_attendance(
         target = datetime.strptime(date, "%Y-%m-%d")
         day_start = datetime(target.year, target.month, target.day, 0, 0, 0)
         day_end = datetime(target.year, target.month, target.day, 23, 59, 59, 999999)
+        id_result = await db.execute(
+            select(Attendance.id).where(and_(Attendance.date >= day_start, Attendance.date <= day_end))
+        )
         stmt = sql_delete(Attendance).where(
             and_(Attendance.date >= day_start, Attendance.date <= day_end)
         )
     else:
+        id_result = await db.execute(select(Attendance.id))
         stmt = sql_delete(Attendance)
+
+    att_ids = [row[0] for row in id_result.all()]
+    if att_ids:
+        await db.execute(
+            sql_delete(NotificationLog).where(NotificationLog.attendance_id.in_(att_ids))
+        )
+
     result = await db.execute(stmt)
     await db.commit()
     return {"deleted": result.rowcount}

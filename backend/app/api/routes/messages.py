@@ -1,8 +1,8 @@
 import uuid
 from datetime import datetime
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, WebSocket, WebSocketDisconnect
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select
+from sqlalchemy import select, func
 from pydantic import BaseModel
 
 from app.db.session import get_db
@@ -10,6 +10,27 @@ from app.models.models import StudentMessage, Student
 from app.core.security import get_current_admin, get_current_student
 
 router = APIRouter()
+
+# WebSocket connections for real-time message badge updates
+message_connections: list[WebSocket] = []
+
+
+async def _unread_count(db: AsyncSession) -> int:
+    result = await db.execute(
+        select(func.count(StudentMessage.id)).where(StudentMessage.is_read == False)
+    )
+    return result.scalar_one() or 0
+
+
+async def broadcast_message_event(payload: dict):
+    dead = []
+    for ws in message_connections:
+        try:
+            await ws.send_json(payload)
+        except Exception:
+            dead.append(ws)
+    for ws in dead:
+        message_connections.remove(ws)
 
 
 class MessageCreate(BaseModel):
@@ -28,6 +49,19 @@ class MessageResponse(BaseModel):
         from_attributes = True
 
 
+@router.websocket("/ws")
+async def messages_ws(websocket: WebSocket):
+    """Admin: real-time message event stream for the unread badge."""
+    await websocket.accept()
+    message_connections.append(websocket)
+    try:
+        while True:
+            await websocket.receive_text()
+    except WebSocketDisconnect:
+        if websocket in message_connections:
+            message_connections.remove(websocket)
+
+
 @router.post("/", response_model=MessageResponse)
 async def send_message(
     data: MessageCreate,
@@ -43,11 +77,24 @@ async def send_message(
     db.add(msg)
     await db.commit()
     await db.refresh(msg)
+
+    count = await _unread_count(db)
+    await broadcast_message_event({"type": "new_message", "unread_count": count})
+
     return {
         **msg.__dict__,
         "student_name": f"{current_student.first_name} {current_student.last_name}",
         "student_id": current_student.student_id,
     }
+
+
+@router.get("/unread-count")
+async def unread_count(
+    db: AsyncSession = Depends(get_db),
+    _: None = Depends(get_current_admin),
+):
+    """Admin: count unread student messages."""
+    return {"count": await _unread_count(db)}
 
 
 @router.get("/", response_model=list[MessageResponse])
@@ -85,4 +132,8 @@ async def mark_read(
         raise HTTPException(status_code=404, detail="Message not found.")
     msg.is_read = True
     await db.commit()
+
+    count = await _unread_count(db)
+    await broadcast_message_event({"type": "read_update", "unread_count": count})
+
     return {"message": "Marked as read."}

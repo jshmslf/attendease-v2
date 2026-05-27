@@ -1,22 +1,22 @@
 # AttendEase
 
 > Browser-based automatic attendance system for university entrance gates.
-> Students are recognized by face as they walk in, marked present or late, and the admin sees it in real time — no extra hardware or software needed at the gate.
+> Students are recognized by face as they walk in, marked present or late, and the admin sees it in real time - no extra hardware or software needed at the gate.
 
 ---
 
 ## How It Works
 
-1. **Admin registers a student** — name, student ID, course, year level.
-2. **Admin enrolls the student's face** — the browser webcam captures 3–5 photos from different angles.
+1. **Admin registers a student** - name, student ID, course, year level.
+2. **Admin enrolls the student's face** - the browser webcam captures 3–5 photos from different angles.
 3. **Photos are uploaded** to the server and face encodings are extracted using the `face_recognition` library.
-4. **Admin clicks "Re-train Model"** — all stored photos are re-processed for better accuracy.
-5. **Admin opens the Live Camera page** (`/camera`) on the entrance PC — the browser requests camera access.
+4. **Admin clicks "Re-train Model"** - all stored photos are re-processed for better accuracy.
+5. **Admin opens the Live Camera page** (`/camera`) on the entrance PC - the browser requests camera access.
 6. **A frame is sent to the server every 2 seconds.** All faces in the frame are detected simultaneously.
 7. **Each face is matched** against enrolled students. Matches above the confidence threshold are recorded.
 8. Attendance is saved as **present** or **late** based on arrival time (default cutoff: 8:00 AM).
 9. A mock SMS is logged to the server console: `[MOCK SMS] → Juan Dela Cruz has been marked present at 07:45 AM.`
-10. **Admin dashboard** receives a real-time update via WebSocket — no page refresh needed.
+10. **Admin dashboard** receives a real-time update via WebSocket - no page refresh needed.
 11. **Students log into the portal** (`/portal`) to view their attendance history and rate.
 12. **Students can contact admin** directly from the portal via the "Contact Admin" button.
 
@@ -69,11 +69,11 @@
 | Face Recognition | `face_recognition` library (dlib HOG), multi-face per frame |
 | Database | PostgreSQL on NeonTech (cloud, serverless) |
 | Frontend | Next.js 14 (App Router), Tailwind CSS, TypeScript |
-| Camera | Browser `getUserMedia` API — no Python or OpenCV at the gate |
+| Camera | Browser `getUserMedia` API - no Python or OpenCV at the gate |
 | Image Storage | Local filesystem (`backend/static/faces/`) |
 | Realtime | WebSocket (`/api/camera/ws/live`) |
 | Timezone | Philippine Time (UTC+8) via `zoneinfo` |
-| Notifications | Mock SMS (console log — swap `sms_service.py` for real provider) |
+| Notifications | Mock SMS (console log - swap `sms_service.py` for real provider) |
 | Deployment | Vercel (frontend) + Render (backend) |
 
 ---
@@ -147,11 +147,11 @@ attendease/
 
 - **Python 3.11+**
 - **Node.js 18+** and **pnpm** (`npm install -g pnpm`)
-- **cmake + C++ build tools** — required to compile dlib:
+- **cmake + C++ build tools** - required to compile dlib:
   - Ubuntu/Debian: `sudo apt install cmake build-essential libopenblas-dev`
   - macOS: `brew install cmake`
   - Windows: [CMake](https://cmake.org/download/) + [Visual Studio Build Tools](https://visualstudio.microsoft.com/visual-cpp-build-tools/) (select "Desktop development with C++")
-- **NeonTech account** — free PostgreSQL database at https://neon.tech
+- **NeonTech account** - free PostgreSQL database at https://neon.tech
 
 > **Windows tip:** Compiling dlib takes 15–25 minutes and needs MSVC build tools. If it keeps failing, use WSL2 (Ubuntu) instead.
 
@@ -208,7 +208,7 @@ API running at **http://localhost:8000** · Swagger docs at **http://localhost:8
 cd frontend
 
 cp .env.example .env.local   # Windows: copy .env.example .env.local
-# No changes needed — defaults point to localhost:8000
+# No changes needed - defaults point to localhost:8000
 
 pnpm install
 pnpm dev
@@ -237,7 +237,7 @@ After running `seed_admin.py`:
 
 Render auto-detects Python via `requirements.txt` and starts the server using `Procfile`.
 
-> First build may take 20–30 minutes — dlib compiles from source.
+> First build may take 20–30 minutes - dlib compiles from source.
 
 > **Important:** The repo includes a `runtime.txt` at the root with `python-3.11.9`. This forces Render to use Python 3.11 instead of its default (3.14), which has no pre-built `dlib` wheels and causes the build to hang indefinitely.
 
@@ -266,7 +266,7 @@ Render auto-detects Python via `requirements.txt` and starts the server using `P
 | `ALLOWED_ORIGINS` | `https://your-app.vercel.app` |
 
 6. Optionally add a **Disk** (under **Advanced**) mounted at `/app/static` so enrolled face photos survive redeploys.
-7. Click **Deploy**. Copy the Render public URL (e.g. `https://attendease.onrender.com`) — you'll need it for Vercel.
+7. Click **Deploy**. Copy the Render public URL (e.g. `https://attendease.onrender.com`) - you'll need it for Vercel.
 
 > **Free tier note:** Render free web services spin down after 15 minutes of inactivity. The first request after idle takes ~30 seconds to wake up.
 
@@ -345,10 +345,10 @@ Render auto-detects Python via `requirements.txt` and starts the server using `P
 
 ## Face Recognition Notes
 
-- **Model:** HOG (fast, CPU-only, no GPU needed) — suitable for gate/hallway with decent lighting.
+- **Model:** HOG (fast, CPU-only, no GPU needed) - suitable for gate/hallway with decent lighting.
 - **Encoding:** 128-D face descriptor stored in PostgreSQL.
 - **Multi-face:** All faces in a frame are processed in one pass.
-- **Threshold:** `FACE_MATCH_THRESHOLD=0.6` — lower = stricter, higher = more lenient.
+- **Threshold:** `FACE_MATCH_THRESHOLD=0.6` - lower = stricter, higher = more lenient.
 - **Accuracy tip:** Enroll 3–5 photos per student at different angles and always click **Re-train Model** after enrolling.
 - **Duplicate prevention:** One record per student per calendar day (PH time).
 
@@ -356,8 +356,8 @@ Render auto-detects Python via `requirements.txt` and starts the server using `P
 
 ## Known Limitations
 
-- **Mock SMS** — notifications are logged to the server console only. Replace `sms_service.py` with Twilio, Semaphore, or any SMS API for real messages.
-- **Local face photo storage** — photos live on the server filesystem. Add a Render Volume at `/app/static` to persist them across redeploys.
-- **Frame-based scanning** — one frame every 2 seconds, not a continuous video stream. Sufficient for a single-lane entrance gate.
-- **dlib compilation** — first install takes 15–25 minutes and needs cmake + C++ build tools.
-- **Single server** — no horizontal scaling. Designed for thesis demo or small deployment.
+- **Mock SMS** - notifications are logged to the server console only. Replace `sms_service.py` with Twilio, Semaphore, or any SMS API for real messages.
+- **Local face photo storage** - photos live on the server filesystem. Add a Render Volume at `/app/static` to persist them across redeploys.
+- **Frame-based scanning** - one frame every 2 seconds, not a continuous video stream. Sufficient for a single-lane entrance gate.
+- **dlib compilation** - first install takes 15–25 minutes and needs cmake + C++ build tools.
+- **Single server** - no horizontal scaling. Designed for thesis demo or small deployment.

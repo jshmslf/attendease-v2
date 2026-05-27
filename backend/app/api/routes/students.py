@@ -3,11 +3,12 @@ import logging
 from fastapi import APIRouter, Depends, HTTPException, UploadFile, File
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
+from sqlalchemy.orm import selectinload
 from pydantic import BaseModel
 from typing import Optional
 
 from app.db.session import get_db
-from app.models.models import Student, Parent, PortalAccount
+from app.models.models import Student, Parent, PortalAccount, Section
 from app.services.face_service import (
     extract_encoding_from_image,
     encode_face_array,
@@ -21,6 +22,14 @@ router = APIRouter()
 logger = logging.getLogger(__name__)
 
 
+def student_dict(s: Student) -> dict:
+    return {
+        **s.__dict__,
+        "has_face_enrolled": s.face_encoding is not None,
+        "section_name": s.section.name if s.section else None,
+    }
+
+
 class StudentCreate(BaseModel):
     student_id: str
     first_name: str
@@ -28,6 +37,7 @@ class StudentCreate(BaseModel):
     email: str
     course: str
     year_level: int
+    section_id: Optional[str] = None
 
 
 class StudentUpdate(BaseModel):
@@ -36,6 +46,7 @@ class StudentUpdate(BaseModel):
     email: Optional[str] = None
     course: Optional[str] = None
     year_level: Optional[int] = None
+    section_id: Optional[str] = None
 
 
 class StudentSelfUpdate(BaseModel):
@@ -72,6 +83,8 @@ class StudentResponse(BaseModel):
     email: str
     course: str
     year_level: int
+    section_id: Optional[str] = None
+    section_name: Optional[str] = None
     has_face_enrolled: bool
     is_active: bool
 
@@ -93,10 +106,15 @@ class ParentResponse(BaseModel):
 
 @router.get("/me", response_model=StudentResponse)
 async def get_my_profile(
+    db: AsyncSession = Depends(get_db),
     current_student: Student = Depends(get_current_student),
 ):
     """Student portal: get own profile."""
-    return {**current_student.__dict__, "has_face_enrolled": current_student.face_encoding is not None}
+    result = await db.execute(
+        select(Student).options(selectinload(Student.section)).where(Student.id == current_student.id)
+    )
+    s = result.scalar_one()
+    return student_dict(s)
 
 
 @router.put("/me", response_model=StudentResponse)
@@ -109,8 +127,10 @@ async def update_my_profile(
     for field, value in data.model_dump(exclude_none=True).items():
         setattr(current_student, field, value)
     await db.commit()
-    await db.refresh(current_student)
-    return {**current_student.__dict__, "has_face_enrolled": current_student.face_encoding is not None}
+    result = await db.execute(
+        select(Student).options(selectinload(Student.section)).where(Student.id == current_student.id)
+    )
+    return student_dict(result.scalar_one())
 
 
 @router.get("/me/parents", response_model=list[ParentResponse])
@@ -140,11 +160,18 @@ async def create_student(
     if existing.scalar_one_or_none():
         raise HTTPException(status_code=400, detail="Student ID already exists.")
 
+    if data.section_id:
+        section = await db.execute(select(Section).where(Section.id == data.section_id))
+        if not section.scalar_one_or_none():
+            raise HTTPException(status_code=400, detail="Section not found.")
+
     student = Student(**data.model_dump())
     db.add(student)
     await db.commit()
-    await db.refresh(student)
-    return {**student.__dict__, "has_face_enrolled": False}
+    result = await db.execute(
+        select(Student).options(selectinload(Student.section)).where(Student.id == student.id)
+    )
+    return student_dict(result.scalar_one())
 
 
 @router.post("/{student_id}/enroll-face")
@@ -448,12 +475,11 @@ async def list_students(
     _: None = Depends(get_current_admin),
 ):
     """List all active students (admin only)."""
-    result = await db.execute(select(Student).where(Student.is_active == True))
+    result = await db.execute(
+        select(Student).options(selectinload(Student.section)).where(Student.is_active == True)
+    )
     students = result.scalars().all()
-    return [
-        {**s.__dict__, "has_face_enrolled": s.face_encoding is not None}
-        for s in students
-    ]
+    return [student_dict(s) for s in students]
 
 
 @router.put("/{student_id}", response_model=StudentResponse)
@@ -475,8 +501,10 @@ async def update_student(
         setattr(student, field, value)
 
     await db.commit()
-    await db.refresh(student)
-    return {**student.__dict__, "has_face_enrolled": student.face_encoding is not None}
+    result = await db.execute(
+        select(Student).options(selectinload(Student.section)).where(Student.student_id == student_id)
+    )
+    return student_dict(result.scalar_one())
 
 
 @router.delete("/{student_id}")
@@ -505,9 +533,9 @@ async def get_student(
     _: None = Depends(get_current_admin),
 ):
     result = await db.execute(
-        select(Student).where(Student.student_id == student_id)
+        select(Student).options(selectinload(Student.section)).where(Student.student_id == student_id)
     )
     student = result.scalar_one_or_none()
     if not student:
         raise HTTPException(status_code=404, detail="Student not found.")
-    return {**student.__dict__, "has_face_enrolled": student.face_encoding is not None}
+    return student_dict(student)

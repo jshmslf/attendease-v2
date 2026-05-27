@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
-import { api, StudentResponse, ParentInfo } from "@/lib/api";
+import { api, StudentResponse, ParentInfo, Subject, Section } from "@/lib/api";
 
 interface StudentForm {
   student_id: string;
@@ -11,6 +11,7 @@ interface StudentForm {
   email: string;
   course: string;
   year_level: number;
+  section_id: string;
 }
 
 interface ParentForm {
@@ -52,8 +53,10 @@ function Badge({ enrolled }: { enrolled: boolean }) {
   );
 }
 
+const DAY_SHORT = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
+
 function EditStudentModal({ student, onClose, onSuccess }: EditStudentModalProps) {
-  const [tab, setTab] = useState<"student" | "parent" | "credentials">("student");
+  const [tab, setTab] = useState<"student" | "parent" | "credentials" | "subjects">("student");
 
   // Student fields
   const [studentForm, setStudentForm] = useState({
@@ -62,6 +65,7 @@ function EditStudentModal({ student, onClose, onSuccess }: EditStudentModalProps
     email: student.email,
     course: student.course,
     year_level: student.year_level,
+    section_id: student.section_id ?? "",
   });
   const [studentLoading, setStudentLoading] = useState(false);
   const [studentError, setStudentError] = useState("");
@@ -89,7 +93,17 @@ function EditStudentModal({ student, onClose, onSuccess }: EditStudentModalProps
   const [credError, setCredError] = useState("");
   const [credSuccess, setCredSuccess] = useState("");
 
-  // Direct fetch helper — bypasses the webpack-cached api module
+  // Subjects
+  const [assignedSubjects, setAssignedSubjects] = useState<Subject[]>([]);
+  const [allSubjects, setAllSubjects] = useState<Subject[]>([]);
+  const [subjectAssignId, setSubjectAssignId] = useState("");
+  const [subjectAssignLoading, setSubjectAssignLoading] = useState(false);
+  const [subjectError, setSubjectError] = useState("");
+
+  // Sections (for Student Info tab)
+  const [sections, setSections] = useState<Section[]>([]);
+
+  // Direct fetch helper - bypasses the webpack-cached api module
   const BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
   async function adminFetch<T>(path: string, init: RequestInit = {}): Promise<T> {
     const token = typeof window !== "undefined" ? localStorage.getItem("admin_token") : null;
@@ -111,7 +125,43 @@ function EditStudentModal({ student, onClose, onSuccess }: EditStudentModalProps
   useEffect(() => {
     loadParents();
     loadPortalAccount();
+    loadSubjectsData();
+    api.getSections().then(setSections).catch(() => {});
   }, []);
+
+  async function loadSubjectsData() {
+    try {
+      const [assigned, all] = await Promise.all([
+        api.getStudentSubjects(student.id),
+        api.getSubjects(),
+      ]);
+      setAssignedSubjects(assigned);
+      setAllSubjects(all);
+      const unassigned = all.filter((s) => !assigned.find((a) => a.id === s.id));
+      setSubjectAssignId(unassigned[0]?.id ?? "");
+    } catch {}
+  }
+
+  async function handleAssignSubject() {
+    if (!subjectAssignId) return;
+    setSubjectAssignLoading(true);
+    setSubjectError("");
+    try {
+      await api.assignStudentToSubject(subjectAssignId, student.id);
+      await loadSubjectsData();
+    } catch (err) {
+      setSubjectError(err instanceof Error ? err.message : "Failed to assign subject.");
+    } finally {
+      setSubjectAssignLoading(false);
+    }
+  }
+
+  async function handleUnassignSubject(subjectId: string) {
+    try {
+      await api.unassignStudentFromSubject(subjectId, student.id);
+      await loadSubjectsData();
+    } catch {}
+  }
 
   async function loadPortalAccount() {
     setCredFetching(true);
@@ -199,7 +249,11 @@ function EditStudentModal({ student, onClose, onSuccess }: EditStudentModalProps
           "Content-Type": "application/json",
           ...(token ? { Authorization: `Bearer ${token}` } : {}),
         },
-        body: JSON.stringify({ ...studentForm, year_level: Number(studentForm.year_level) }),
+        body: JSON.stringify({
+          ...studentForm,
+          year_level: Number(studentForm.year_level),
+          section_id: studentForm.section_id || null,
+        }),
       });
       if (!res.ok) {
         const err = await res.json().catch(() => ({ detail: res.statusText }));
@@ -275,7 +329,7 @@ function EditStudentModal({ student, onClose, onSuccess }: EditStudentModalProps
 
         {/* Tabs */}
         <div className="flex gap-1 mb-5 p-1 rounded-lg" style={{ background: "var(--bg-surface)" }}>
-          {(["student", "parent", "credentials"] as const).map((t) => (
+          {(["student", "parent", "credentials", "subjects"] as const).map((t) => (
             <button
               key={t}
               onClick={() => setTab(t)}
@@ -286,7 +340,7 @@ function EditStudentModal({ student, onClose, onSuccess }: EditStudentModalProps
                 border: tab === t ? "1px solid var(--border)" : "1px solid transparent",
               }}
             >
-              {t === "student" ? "Student Info" : t === "parent" ? "Parent / Guardian" : "Credentials"}
+              {t === "student" ? "Student Info" : t === "parent" ? "Parent / Guardian" : t === "credentials" ? "Credentials" : "Subjects"}
             </button>
           ))}
         </div>
@@ -342,6 +396,15 @@ function EditStudentModal({ student, onClose, onSuccess }: EditStudentModalProps
                 </select>
               </div>
             </div>
+            <div>
+              <label className="block text-xs font-medium mb-1" style={{ color: "var(--text-secondary)" }}>Section</label>
+              <select value={studentForm.section_id}
+                onChange={(e) => setStudentForm({ ...studentForm, section_id: e.target.value })}
+                className="w-full px-3 py-2 rounded-lg text-sm" style={inputStyle}>
+                <option value="">No section</option>
+                {sections.map((sec) => <option key={sec.id} value={sec.id}>{sec.name}</option>)}
+              </select>
+            </div>
             <div className="flex gap-3 pt-2">
               <button type="button" onClick={onClose}
                 className="flex-1 py-2 rounded-lg text-sm font-medium"
@@ -365,7 +428,7 @@ function EditStudentModal({ student, onClose, onSuccess }: EditStudentModalProps
             )}
             {!credFetching && (
               <>
-                {/* Load error — shown when portalAccount fetch failed */}
+                {/* Load error - shown when portalAccount fetch failed */}
                 {credFetchError && (
                   <div className="px-3 py-2 rounded-lg text-sm"
                     style={{ background: "#7f1d1d30", border: "1px solid #ef4444", color: "#fca5a5" }}>
@@ -467,6 +530,90 @@ function EditStudentModal({ student, onClose, onSuccess }: EditStudentModalProps
                 )}
               </>
             )}
+          </div>
+        )}
+
+        {/* Subjects Tab */}
+        {tab === "subjects" && (
+          <div className="space-y-3">
+            {subjectError && (
+              <div className="px-3 py-2 rounded-lg text-sm"
+                style={{ background: "#7f1d1d30", border: "1px solid #ef4444", color: "#fca5a5" }}>
+                {subjectError}
+              </div>
+            )}
+
+            {/* Assign new subject */}
+            <div className="flex gap-2">
+              <select
+                value={subjectAssignId}
+                onChange={(e) => setSubjectAssignId(e.target.value)}
+                className="flex-1 px-3 py-2 rounded-lg text-sm"
+                style={{ background: "var(--bg-surface)", border: "1px solid var(--border)", color: "var(--text-primary)" }}
+                disabled={allSubjects.filter((s) => !assignedSubjects.find((a) => a.id === s.id)).length === 0}
+              >
+                {allSubjects.filter((s) => !assignedSubjects.find((a) => a.id === s.id)).length === 0 ? (
+                  <option value="">All subjects assigned</option>
+                ) : (
+                  allSubjects
+                    .filter((s) => !assignedSubjects.find((a) => a.id === s.id))
+                    .map((s) => (
+                      <option key={s.id} value={s.id}>{s.subject_code} - {s.name}</option>
+                    ))
+                )}
+              </select>
+              <button
+                onClick={handleAssignSubject}
+                disabled={subjectAssignLoading || !subjectAssignId}
+                className="px-4 py-2 rounded-lg text-sm font-semibold text-white flex-shrink-0"
+                style={{
+                  background: !subjectAssignId ? "#1DB95450" : "var(--accent)",
+                  cursor: !subjectAssignId ? "not-allowed" : "pointer",
+                }}
+              >
+                {subjectAssignLoading ? "..." : "Assign"}
+              </button>
+            </div>
+
+            {/* Assigned subjects list */}
+            {assignedSubjects.length === 0 ? (
+              <p className="text-sm text-center py-6" style={{ color: "var(--text-secondary)" }}>
+                No subjects assigned. Attendance will use the global time threshold.
+              </p>
+            ) : (
+              <ul className="space-y-1">
+                {assignedSubjects.map((s) => {
+                  const sched = s.schedules
+                    .sort((a, b) => a.day_of_week - b.day_of_week)
+                    .map((sc) => `${DAY_SHORT[sc.day_of_week]} ${sc.start_time}`)
+                    .join(", ") || "No schedule";
+                  return (
+                    <li key={s.id} className="flex items-center justify-between px-3 py-2.5 rounded-lg"
+                      style={{ background: "var(--bg-surface)" }}>
+                      <div>
+                        <span className="text-xs font-semibold font-mono" style={{ color: "var(--accent)" }}>{s.subject_code}</span>
+                        <span className="text-sm font-medium ml-2" style={{ color: "var(--text-primary)" }}>{s.name}</span>
+                        <p className="text-xs mt-0.5" style={{ color: "var(--text-secondary)" }}>{sched}</p>
+                      </div>
+                      <button
+                        onClick={() => handleUnassignSubject(s.id)}
+                        className="text-xs px-2 py-1 rounded-md ml-3 flex-shrink-0"
+                        style={{ color: "#ef4444", background: "#7f1d1d20" }}
+                      >
+                        Remove
+                      </button>
+                    </li>
+                  );
+                })}
+              </ul>
+            )}
+
+            <div className="flex justify-end pt-2">
+              <button onClick={onClose} className="px-4 py-2 rounded-lg text-sm font-medium"
+                style={{ background: "var(--bg-surface)", color: "var(--text-secondary)" }}>
+                Close
+              </button>
+            </div>
           </div>
         )}
 
@@ -611,8 +758,13 @@ function AddStudentModal({ onClose, onSuccess }: AddStudentModalProps) {
   const [step, setStep] = useState(1);
   const [studentData, setStudentData] = useState<StudentForm>({
     student_id: "", first_name: "", last_name: "",
-    email: "", course: "", year_level: 1,
+    email: "", course: "", year_level: 1, section_id: "",
   });
+  const [sections, setSections] = useState<Section[]>([]);
+
+  useEffect(() => {
+    api.getSections().then(setSections).catch(() => {});
+  }, []);
   const [parentData, setParentData] = useState<ParentForm>({
     name: "", phone_number: "+63", relationship_to_student: "Parent",
   });
@@ -626,7 +778,12 @@ function AddStudentModal({ onClose, onSuccess }: AddStudentModalProps) {
     setLoading(true);
     setError("");
     try {
-      const student = await api.createStudent({ ...studentData, year_level: Number(studentData.year_level) });
+      const student = await api.createStudent({
+        ...studentData,
+        year_level: Number(studentData.year_level),
+        section_id: studentData.section_id || null,
+        section_name: null,
+      });
       setCreatedStudentId(student.student_id);
       setStep(2);
     } catch (err) {
@@ -741,6 +898,15 @@ function AddStudentModal({ onClose, onSuccess }: AddStudentModalProps) {
                   onChange={(e) => setStudentData({ ...studentData, year_level: Number(e.target.value) })}
                   className="w-full px-3 py-2 rounded-lg text-sm" style={inputStyle}>
                   {[1, 2, 3, 4].map((y) => <option key={y} value={y}>Year {y}</option>)}
+                </select>
+              </div>
+              <div className="col-span-2">
+                <label className="block text-xs font-medium mb-1" style={{ color: "var(--text-secondary)" }}>Section</label>
+                <select value={studentData.section_id}
+                  onChange={(e) => setStudentData({ ...studentData, section_id: e.target.value })}
+                  className="w-full px-3 py-2 rounded-lg text-sm" style={inputStyle}>
+                  <option value="">No section</option>
+                  {sections.map((sec) => <option key={sec.id} value={sec.id}>{sec.name}</option>)}
                 </select>
               </div>
             </div>
@@ -932,6 +1098,7 @@ export default function StudentsPage() {
               <th className="px-6 py-3 text-left font-medium">Email</th>
               <th className="px-6 py-3 text-left font-medium">Course</th>
               <th className="px-6 py-3 text-left font-medium">Year</th>
+              <th className="px-6 py-3 text-left font-medium">Section</th>
               <th className="px-6 py-3 text-left font-medium">Face Status</th>
               <th className="px-6 py-3 text-left font-medium">Actions</th>
             </tr>
@@ -939,13 +1106,13 @@ export default function StudentsPage() {
           <tbody>
             {loading ? (
               <tr>
-                <td colSpan={7} className="px-6 py-12 text-center" style={{ color: "var(--text-secondary)" }}>
+                <td colSpan={8} className="px-6 py-12 text-center" style={{ color: "var(--text-secondary)" }}>
                   Loading students...
                 </td>
               </tr>
             ) : filtered.length === 0 ? (
               <tr>
-                <td colSpan={7} className="px-6 py-12 text-center" style={{ color: "var(--text-secondary)" }}>
+                <td colSpan={8} className="px-6 py-12 text-center" style={{ color: "var(--text-secondary)" }}>
                   {search ? "No students match your search." : "No students registered yet."}
                 </td>
               </tr>
@@ -963,6 +1130,9 @@ export default function StudentsPage() {
                   <td className="px-6 py-3 text-xs" style={{ color: "var(--text-secondary)" }}>{s.email}</td>
                   <td className="px-6 py-3 text-xs" style={{ color: "var(--text-secondary)" }}>{s.course}</td>
                   <td className="px-6 py-3 text-xs" style={{ color: "var(--text-secondary)" }}>Year {s.year_level}</td>
+                  <td className="px-6 py-3 text-xs" style={{ color: "var(--text-secondary)" }}>
+                    {s.section_name ?? <span style={{ color: "var(--border)" }}>-</span>}
+                  </td>
                   <td className="px-6 py-3"><Badge enrolled={s.has_face_enrolled} /></td>
                   <td className="px-6 py-3">
                     <div className="flex items-center gap-2">

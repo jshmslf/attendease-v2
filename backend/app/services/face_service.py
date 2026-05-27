@@ -116,7 +116,7 @@ async def recognize_face_from_frame(
 def extract_all_faces_from_image(image_bytes: bytes) -> list[tuple[np.ndarray, tuple]]:
     """
     Detect ALL faces in image and return their encodings + bounding boxes.
-    Returns list of (encoding, (top, right, bottom, left)) — empty if none found.
+    Returns list of (encoding, (top, right, bottom, left)) - empty if none found.
     """
     np_array = np.frombuffer(image_bytes, np.uint8)
     image = cv2.imdecode(np_array, cv2.IMREAD_COLOR)

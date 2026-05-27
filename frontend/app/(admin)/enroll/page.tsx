@@ -232,7 +232,7 @@ function EnrollContent() {
       </div>
 
       <div className="grid grid-cols-5 gap-6">
-        {/* Left panel — Student selector */}
+        {/* Left panel - Student selector */}
         <div className="col-span-2">
           <div className="rounded-xl overflow-hidden" style={{ background: "var(--bg-card)", border: "1px solid var(--border)" }}>
             <div className="px-4 py-3" style={{ borderBottom: "1px solid var(--border)" }}>
@@ -291,7 +291,7 @@ function EnrollContent() {
           </div>
         </div>
 
-        {/* Right panel — Webcam capture */}
+        {/* Right panel - Webcam capture */}
         <div className="col-span-3 space-y-4">
           {!selectedStudent ? (
             <div className="rounded-xl flex items-center justify-center"
@@ -441,7 +441,7 @@ function EnrollContent() {
               {captures.length > 0 && (
                 <div>
                   <p className="text-xs font-medium mb-2" style={{ color: "var(--text-secondary)" }}>
-                    Captured photos — will be enrolled
+                    Captured photos - will be enrolled
                   </p>
                   <div className="flex gap-2 flex-wrap">
                     {captures.map(({ url }, i) => (
