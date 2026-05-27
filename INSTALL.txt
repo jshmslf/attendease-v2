@@ -1,0 +1,259 @@
+AttendEase - Installation Guide
+================================
+A face recognition attendance system.
+Follow every step in order. Do not skip anything.
+
+
+----------------------------------------------------------------
+PART 1 - WHAT YOU NEED TO INSTALL FIRST
+----------------------------------------------------------------
+
+Before you touch the project, install all of these on your computer.
+
+1. Git
+   Download from: https://git-scm.com/download/win
+   Install with all default settings.
+
+2. Python 3.11.9 (EXACT version - do not use 3.12, 3.13, or 3.14)
+
+   Why 3.11 specifically? The face recognition library we use has a
+   pre-built Windows package only for Python 3.11. Any other version
+   will fail during installation.
+
+   Download from: https://www.python.org/downloads/release/python-3119/
+   Scroll down to the "Files" section and download:
+      Windows installer (64-bit) - the file named python-3.11.9-amd64.exe
+
+   During installation:
+      - On the very first screen, CHECK the box that says
+        "Add Python 3.11 to PATH" - this is very important
+      - Then click "Install Now"
+
+   After installing, open Command Prompt and verify:
+      python --version
+   It should say: Python 3.11.9
+
+3. Node.js (LTS version)
+   Download from: https://nodejs.org
+   Click the LTS button (left side). Install with all default settings.
+
+   Verify after install:
+      node --version
+   Should say v18.x.x or higher.
+
+4. pnpm (package manager for the frontend)
+   After Node.js is installed, open Command Prompt and run:
+      npm install -g pnpm
+
+   Verify:
+      pnpm --version
+
+
+----------------------------------------------------------------
+PART 2 - GET A FREE DATABASE
+----------------------------------------------------------------
+
+AttendEase uses PostgreSQL. The easiest way is a free cloud database
+from NeonTech (no credit card required).
+
+1. Go to https://neon.tech and create a free account.
+2. After signing in, create a new Project (any name is fine).
+3. On the project dashboard, find the "Connection String".
+   It looks like this:
+      postgresql://user:password@host/dbname?sslmode=require
+4. Copy that string and save it somewhere - you will need it later.
+
+
+----------------------------------------------------------------
+PART 3 - CLONE THE PROJECT FROM GITHUB
+----------------------------------------------------------------
+
+Open Command Prompt (search "cmd" in the Start menu) and run:
+
+   git clone https://github.com/jshmslf/attendease-v2.git
+   cd attendease-v2
+
+
+----------------------------------------------------------------
+PART 4 - SET UP THE BACKEND
+----------------------------------------------------------------
+
+All commands in this section must be run in Command Prompt (cmd).
+Do not use PowerShell for these steps.
+
+Make sure you are inside the attendease-v2 folder, then run:
+
+   cd backend
+
+Create a virtual environment:
+   python -m venv venv
+
+Activate it:
+   venv\Scripts\activate
+
+You should now see (venv) appear at the start of your prompt line.
+If you do not see it, stop and do not continue until it shows.
+
+Double-check Python version (must be 3.11):
+   python --version
+
+If it says anything other than Python 3.11.x, stop here and
+reinstall Python 3.11.9, making sure to check "Add to PATH".
+
+
+Now install the face recognition packages IN THIS EXACT ORDER:
+
+Step 1:
+   pip install dlib-bin==19.24.6
+
+Step 2:
+   pip install face-recognition==1.3.0 --no-deps
+
+Step 3:
+   pip install face-recognition-models Pillow scipy
+
+   Why this order? dlib-bin is a pre-built binary so it installs
+   without needing to compile anything. Installing face-recognition
+   with --no-deps stops pip from trying to compile the original dlib
+   from source, which would require cmake and Visual Studio and take
+   over 30 minutes.
+
+Now install the rest of the backend packages:
+   pip install -r requirements.txt
+
+
+Create the environment file:
+   copy .env.example .env
+
+Open the .env file in Notepad. Fill in your values:
+
+   DATABASE_URL=paste-your-neontech-connection-string-here
+   SECRET_KEY=paste-a-random-secret-key-here
+   ALLOWED_ORIGINS=["http://localhost:3000"]
+   FACE_MATCH_THRESHOLD=0.6
+   LOCAL_STORAGE_PATH=static/faces
+   LATE_THRESHOLD_HOUR=8
+   DEBUG=False
+
+To generate a SECRET_KEY, run this (with venv still active):
+   python -c "import secrets; print(secrets.token_hex(32))"
+Copy the output and paste it as the SECRET_KEY value.
+
+
+Set up the database tables:
+   alembic upgrade head
+
+Create the default admin and demo student accounts:
+   python seed_admin.py
+
+You should see printed:
+   Admin login:   admin / admin123
+   Student portal login:   student / student123
+
+
+Start the backend server:
+   uvicorn app.main:app --reload
+
+Leave this Command Prompt window open. The backend is now running
+at http://localhost:8000
+
+
+----------------------------------------------------------------
+PART 5 - SET UP THE FRONTEND
+----------------------------------------------------------------
+
+Open a SECOND Command Prompt window. Keep the backend running
+in the first one.
+
+From wherever you are, navigate to the frontend folder:
+   cd attendease-v2\frontend
+
+Create the environment file:
+   copy .env.example .env.local
+
+No changes needed - the defaults already point to localhost:8000.
+
+Install frontend dependencies:
+   pnpm install
+
+Start the frontend:
+   pnpm dev
+
+The frontend is now running at http://localhost:3000
+
+
+----------------------------------------------------------------
+PART 6 - OPEN THE APP
+----------------------------------------------------------------
+
+Open your browser and go to http://localhost:3000
+
+Admin Panel login:
+   URL:       http://localhost:3000
+   Username:  admin
+   Password:  admin123
+
+Student Portal login:
+   URL:       http://localhost:3000/portal/login
+   Student ID: 2024-00001
+   Password:  student123
+
+Change these default passwords after your first login.
+
+
+----------------------------------------------------------------
+PART 7 - RUNNING IT AGAIN AFTER THE FIRST SETUP
+----------------------------------------------------------------
+
+You do not need to reinstall anything after the first time.
+Just run these two sets of commands whenever you want to use it.
+
+Terminal 1 - Backend:
+   cd attendease-v2\backend
+   venv\Scripts\activate
+   uvicorn app.main:app --reload
+
+Terminal 2 - Frontend:
+   cd attendease-v2\frontend
+   pnpm dev
+
+Then open http://localhost:3000 in your browser.
+
+
+----------------------------------------------------------------
+PART 8 - COMMON ERRORS AND FIXES
+----------------------------------------------------------------
+
+"python is not recognized as an internal or external command"
+   Python was not added to PATH during installation.
+   Uninstall Python, then reinstall it and check
+   "Add Python 3.11 to PATH" on the first screen.
+
+"venv\Scripts\activate" is not recognized
+   Make sure you are using Command Prompt (cmd), not PowerShell.
+   In PowerShell, the command is .\venv\Scripts\activate instead.
+
+(venv) disappears after opening a new terminal
+   The virtual environment must be activated every time you open
+   a new terminal. Run venv\Scripts\activate again.
+
+"alembic: command not found" or "uvicorn: command not found"
+   The virtual environment is not active.
+   Run venv\Scripts\activate first.
+
+Error about dlib or face_recognition during install
+   You are likely using the wrong Python version.
+   Run python --version - it must say 3.11.x.
+   If it says 3.12 or higher, reinstall Python 3.11.9 and
+   delete and recreate the venv folder.
+
+"Could not connect to database" or errors from alembic
+   Your DATABASE_URL in .env is wrong.
+   Go back to NeonTech, copy the connection string again,
+   and make sure it ends with ?sslmode=require
+
+Frontend shows a blank page or API errors
+   Make sure the backend is still running in the other terminal.
+   Check http://localhost:8000/health in your browser - it should
+   return {"status": "ok"}. If not, the backend crashed or was
+   closed - restart it.
