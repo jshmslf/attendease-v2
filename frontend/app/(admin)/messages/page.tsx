@@ -63,7 +63,7 @@ export default function MessagesPage() {
   const unreadCount = messages.filter((m) => !m.is_read).length;
 
   return (
-    <div className="p-6 max-w-3xl mx-auto">
+    <div className="p-4 md:p-6 max-w-3xl mx-auto">
       <div className="mb-6 flex items-center justify-between">
         <div>
           <h1 className="text-xl font-semibold" style={{ color: "var(--text-primary)" }}>Student Messages</h1>

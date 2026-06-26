@@ -17,6 +17,13 @@ html[data-theme="dark"] {
   --text-primary: #f1f5f9;
   --text-secondary: #94a3b8;
   --border: #1e2d45;
+  --status-present-text: #6ee7b7;
+  --status-late-text: #fcd34d;
+  --status-absent-text: #fca5a5;
+  --overlay-start: rgba(13,27,42,0.95);
+  --overlay-end: rgba(13,27,42,0.4);
+  --overlay-start-dense: rgba(13,27,42,0.97);
+  --overlay-end-dense: rgba(13,27,42,0.65);
 }
 
 html[data-theme="light"] {
@@ -26,6 +33,13 @@ html[data-theme="light"] {
   --text-primary: #0f172a;
   --text-secondary: #64748b;
   --border: #e2e8f0;
+  --status-present-text: #15803d;
+  --status-late-text: #b45309;
+  --status-absent-text: #dc2626;
+  --overlay-start: rgba(248,247,244,0.95);
+  --overlay-end: rgba(248,247,244,0.4);
+  --overlay-start-dense: rgba(248,247,244,0.97);
+  --overlay-end-dense: rgba(248,247,244,0.65);
 }
 
 * {
@@ -40,3 +54,8 @@ body {
   font-family: 'Inter', system-ui, -apple-system, sans-serif;
   -webkit-font-smoothing: antialiased;
 }
+
+.logo-dark  { display: block; }
+.logo-light { display: none;  }
+html[data-theme="light"] .logo-dark  { display: none;  }
+html[data-theme="light"] .logo-light { display: block; }

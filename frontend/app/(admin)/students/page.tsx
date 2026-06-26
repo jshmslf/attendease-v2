@@ -1061,8 +1061,8 @@ export default function StudentsPage() {
   );
 
   return (
-    <div className="p-8 w-full">
-      <div className="flex items-center justify-between mb-8">
+    <div className="p-4 md:p-8 w-full">
+      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 mb-8">
         <div>
           <h1 className="text-2xl font-semibold" style={{ color: "var(--text-primary)" }}>Students</h1>
           <p className="text-sm mt-1" style={{ color: "var(--text-secondary)" }}>
@@ -1090,7 +1090,8 @@ export default function StudentsPage() {
       </div>
 
       <div className="rounded-xl overflow-hidden" style={{ background: "var(--bg-card)", border: "1px solid var(--border)" }}>
-        <table className="w-full text-sm">
+        <div className="overflow-x-auto">
+        <table className="w-full min-w-[700px] text-sm">
           <thead>
             <tr style={{ borderBottom: "1px solid var(--border)", color: "var(--text-secondary)" }}>
               <th className="px-6 py-3 text-left font-medium">Student ID</th>
@@ -1168,6 +1169,7 @@ export default function StudentsPage() {
             )}
           </tbody>
         </table>
+        </div>
       </div>
 
       {showAdd && (

@@ -223,7 +223,7 @@ function EnrollContent() {
   });
 
   return (
-    <div className="p-8 w-full">
+    <div className="p-4 md:p-8 w-full">
       <div className="mb-8">
         <h1 className="text-2xl font-semibold" style={{ color: "var(--text-primary)" }}>Face Enrollment</h1>
         <p className="text-sm mt-1" style={{ color: "var(--text-secondary)" }}>
@@ -231,9 +231,9 @@ function EnrollContent() {
         </p>
       </div>
 
-      <div className="grid grid-cols-5 gap-6">
+      <div className="grid grid-cols-1 lg:grid-cols-5 gap-6">
         {/* Left panel - Student selector */}
-        <div className="col-span-2">
+        <div className="lg:col-span-2">
           <div className="rounded-xl overflow-hidden" style={{ background: "var(--bg-card)", border: "1px solid var(--border)" }}>
             <div className="px-4 py-3" style={{ borderBottom: "1px solid var(--border)" }}>
               <div className="relative">
@@ -292,7 +292,7 @@ function EnrollContent() {
         </div>
 
         {/* Right panel - Webcam capture */}
-        <div className="col-span-3 space-y-4">
+        <div className="lg:col-span-3 space-y-4">
           {!selectedStudent ? (
             <div className="rounded-xl flex items-center justify-center"
               style={{ height: "360px", background: "var(--bg-card)", border: "1px solid var(--border)" }}>

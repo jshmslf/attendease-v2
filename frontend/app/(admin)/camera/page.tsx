@@ -188,7 +188,7 @@ export default function CameraPage() {
   }, []);
 
   return (
-    <div className="p-8 w-full">
+    <div className="p-4 md:p-8 w-full">
       {/* Header */}
       <div className="mb-6 flex items-center justify-between">
         <div>

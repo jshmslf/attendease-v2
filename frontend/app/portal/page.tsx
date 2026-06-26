@@ -185,16 +185,30 @@ export default function PortalPage() {
   const summary: AttendanceSummary | undefined = data?.summary;
   const records: AttendanceRecord[] = data?.records ?? [];
 
+
   return (
-    <div className="min-h-screen" style={{ background: "var(--bg-dark)" }}>
+    <div
+      className="min-h-screen relative"
+      style={{
+        backgroundColor: "var(--bg-dark)",
+        backgroundImage: "url('/image/ama_facade.png')",
+        backgroundSize: "60% auto",
+        backgroundPosition: "right 0px bottom -150px",
+        backgroundRepeat: "no-repeat",
+        backgroundAttachment: "fixed",
+      }}
+    >
+      <div
+        className="absolute inset-0 pointer-events-none"
+        style={{ background: "linear-gradient(to right, var(--overlay-start-dense) 50%, var(--overlay-end-dense) 100%)", zIndex: 0 }}
+      />
+      <div className="relative" style={{ zIndex: 1 }}>
       <header
-        className="px-6 py-4 flex items-center gap-3"
+        className="px-4 md:px-6 py-4 flex items-center gap-3"
         style={{ background: "var(--bg-card)", borderBottom: "1px solid var(--border)" }}
       >
-        <img
-          src={theme === "dark" ? "/logo/logo-1x1.png" : "/logo/logo-1x1-black.png"}
-          alt="AttendEase"
-          className="w-8 h-8 rounded-lg object-contain"
+        <img src="/logo/logo-1x1.png"       alt="AttendEase" className="logo-dark  w-8 h-8 rounded-lg object-contain"
+        /><img src="/logo/logo-1x1-black.png" alt=""            className="logo-light w-8 h-8 rounded-lg object-contain" aria-hidden
         />
         <span className="font-semibold" style={{ color: "var(--text-primary)" }}>AttendEase</span>
         <span className="mx-1" style={{ color: "var(--text-secondary)" }}>·</span>
@@ -232,7 +246,7 @@ export default function PortalPage() {
         </div>
       </header>
 
-      <main className="max-w-5xl mx-auto px-6 py-8">
+      <main className="max-w-5xl mx-auto px-4 md:px-6 py-6 md:py-8">
 
         {/* Profile Card */}
         <div
@@ -269,7 +283,7 @@ export default function PortalPage() {
               Parent / Guardian
             </p>
             {myParents.length === 0 ? (
-              <p className="text-sm" style={{ color: "var(--text-secondary)" }}>No parent contact on record.</p>
+              <p className="text-sm" style={{ color: "var(--text-secondary)" }}>No parent contact on record. Contact your school admin to have one added.</p>
             ) : (
               <ul className="space-y-3">
                 {myParents.map((p) => (
@@ -589,7 +603,16 @@ export default function PortalPage() {
                   </span>
                 </div>
                 <AttendanceBar rate={summary.attendance_rate} />
-                <div className="grid grid-cols-3 gap-4 mt-6">
+                <p className="text-xs mt-1.5" style={{
+                  color: summary.attendance_rate >= 90 ? "var(--status-present-text)"
+                       : summary.attendance_rate >= 75 ? "var(--status-late-text)"
+                       : "var(--status-absent-text)"
+                }}>
+                  {summary.attendance_rate >= 90 ? "Excellent attendance"
+                   : summary.attendance_rate >= 75 ? "Good attendance"
+                   : "At risk — below 75% threshold"}
+                </p>
+                <div className="grid grid-cols-3 gap-2 md:gap-4 mt-6">
                   {([
                     { label: "Present", value: summary.present, color: "text-emerald-600" },
                     { label: "Late", value: summary.late, color: "text-amber-600" },
@@ -707,7 +730,7 @@ export default function PortalPage() {
       {/* Floating Contact Admin button */}
       <button
         onClick={() => setMsgOpen(true)}
-        className="fixed bottom-6 right-6 flex items-center gap-2 px-4 py-3 rounded-full text-sm font-semibold text-white shadow-lg transition-transform hover:scale-105 active:scale-95"
+        className="fixed bottom-4 right-4 md:bottom-6 md:right-6 flex items-center gap-2 px-4 py-3 rounded-full text-sm font-semibold text-white shadow-lg transition-transform hover:scale-105 active:scale-95"
         style={{ background: "linear-gradient(135deg, #1DB954, #158a3e)", zIndex: 40 }}
       >
         <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -805,6 +828,7 @@ export default function PortalPage() {
           </div>
         </div>
       )}
+      </div>
     </div>
   );
 }

@@ -114,6 +114,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
   const pathname = usePathname();
   const [ready, setReady] = useState(false);
   const [unreadCount, setUnreadCount] = useState(0);
+  const [sidebarOpen, setSidebarOpen] = useState(false);
   const { theme, toggle } = useTheme();
   const wsRef = useRef<WebSocket | null>(null);
   const reconnectRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -167,21 +168,45 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
     router.replace("/login");
   }
 
+  const bgStyle = {
+    backgroundColor: "var(--bg-dark)",
+    backgroundImage: "url('/image/ama_facade.png')",
+    backgroundSize: "60% auto",
+    backgroundPosition: "right 0px bottom -150px",
+    backgroundRepeat: "no-repeat",
+  };
+
   if (!ready) {
     return (
-      <div className="min-h-screen flex items-center justify-center" style={{ background: "var(--bg-dark)" }}>
-        <div className="text-sm" style={{ color: "var(--text-secondary)" }}>Loading...</div>
+      <div className="min-h-screen flex items-center justify-center relative" style={bgStyle}>
+        <div className="absolute inset-0 pointer-events-none" style={{ background: "linear-gradient(to right, var(--overlay-start-dense) 50%, var(--overlay-end-dense) 100%)", zIndex: 0 }} />
+        <div className="relative" style={{ zIndex: 1, color: "var(--text-secondary)", fontSize: "0.875rem" }}>Loading...</div>
       </div>
     );
   }
 
   return (
-    <div className="flex h-screen overflow-hidden" style={{ background: "var(--bg-dark)" }}>
-      <aside className="w-60 flex-shrink-0 flex flex-col h-full overflow-y-auto"
-        style={{ background: "var(--bg-card)", borderRight: "1px solid var(--border)" }}>
+    <div className="flex h-screen overflow-hidden relative" style={bgStyle}>
+      <div className="absolute inset-0 pointer-events-none" style={{ background: "linear-gradient(to right, var(--overlay-start-dense) 50%, var(--overlay-end-dense) 100%)", zIndex: 0 }} />
+
+      {/* Mobile backdrop */}
+      {sidebarOpen && (
+        <div
+          className="fixed inset-0 bg-black/50 z-20 lg:hidden"
+          onClick={() => setSidebarOpen(false)}
+        />
+      )}
+
+      <aside
+        className={`w-60 flex-shrink-0 flex flex-col h-full overflow-y-auto transition-transform duration-300 z-30
+          fixed inset-y-0 left-0 lg:relative lg:translate-x-0
+          ${sidebarOpen ? "translate-x-0" : "-translate-x-full"}`}
+        style={{ background: "var(--bg-card)", borderRight: "1px solid var(--border)" }}
+      >
         <div className="px-6 py-5 flex items-center gap-3"
           style={{ borderBottom: "1px solid var(--border)" }}>
-          <img src={theme === "dark" ? "/logo/logo-1x1.png" : "/logo/logo-1x1-black.png"} className="w-8 h-8 rounded-lg object-contain flex-shrink-0" alt="AttendEase" />
+          <img src="/logo/logo-1x1.png"       alt="AttendEase" className="logo-dark  w-8 h-8 rounded-lg object-contain flex-shrink-0" />
+          <img src="/logo/logo-1x1-black.png" alt=""            className="logo-light w-8 h-8 rounded-lg object-contain flex-shrink-0" aria-hidden />
           <div>
             <p className="text-sm font-bold" style={{ color: "var(--text-primary)" }}>AttendEase</p>
             <p className="text-xs" style={{ color: "var(--text-secondary)" }}>Admin Panel</p>
@@ -195,6 +220,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
               <Link
                 key={item.href}
                 href={item.href}
+                onClick={() => setSidebarOpen(false)}
                 className="flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all"
                 style={{
                   background: active ? "#1DB95420" : "transparent",
@@ -254,7 +280,18 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
         </div>
       </aside>
 
-      <main className="flex-1 overflow-y-auto">
+      <main className="flex-1 overflow-y-auto" style={{ position: "relative", zIndex: 1 }}>
+        {/* Mobile top bar with hamburger */}
+        <div className="lg:hidden sticky top-0 z-10 flex items-center gap-3 px-4 py-3" style={{ background: "var(--bg-card)", borderBottom: "1px solid var(--border)" }}>
+          <button onClick={() => setSidebarOpen(true)} className="p-1.5 rounded-lg" style={{ color: "var(--text-secondary)" }} aria-label="Open menu">
+            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
+            </svg>
+          </button>
+          <img src="/logo/logo-1x1.png"       alt="AttendEase" className="logo-dark  w-6 h-6 rounded object-contain" />
+          <img src="/logo/logo-1x1-black.png" alt=""            className="logo-light w-6 h-6 rounded object-contain" aria-hidden />
+          <span className="text-sm font-bold" style={{ color: "var(--text-primary)" }}>AttendEase</span>
+        </div>
         {children}
       </main>
     </div>

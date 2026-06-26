@@ -1,18 +1,19 @@
 "use client";
 
-import { useState, useEffect, useRef, useCallback } from "react";
+import React, { useState, useEffect, useRef, useCallback } from "react";
 import { api, AttendanceRecord } from "@/lib/api";
 
 const WS_URL = process.env.NEXT_PUBLIC_WS_URL || "ws://localhost:8000";
 
 function todayIso(): string {
-  return new Date().toISOString().split("T")[0];
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
 }
 
 function shiftDate(dateStr: string, days: number): string {
   const d = new Date(dateStr + "T00:00:00");
   d.setDate(d.getDate() + days);
-  return d.toISOString().split("T")[0];
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
 }
 
 function formatDateLabel(dateStr: string): string {
@@ -61,17 +62,30 @@ interface ClearConfirmModalProps {
   onClose: () => void;
 }
 
-const statusMap: Record<string, string> = {
-  present: "bg-emerald-500/20 text-emerald-300 border-emerald-500/30",
-  late: "bg-amber-500/20 text-amber-300 border-amber-500/30",
-  absent: "bg-red-500/20 text-red-300 border-red-500/30",
-  already_marked: "bg-slate-500/20 text-slate-400 border-slate-500/30",
+const statusStyles: Record<string, React.CSSProperties> = {
+  present:        { background: "rgba(34,197,94,0.15)",   color: "var(--status-present-text)", border: "1px solid rgba(34,197,94,0.3)" },
+  late:           { background: "rgba(245,158,11,0.15)",  color: "var(--status-late-text)",    border: "1px solid rgba(245,158,11,0.3)" },
+  absent:         { background: "rgba(239,68,68,0.15)",   color: "var(--status-absent-text)",  border: "1px solid rgba(239,68,68,0.3)" },
+  already_marked: { background: "rgba(100,116,139,0.15)", color: "var(--text-secondary)",      border: "1px solid rgba(100,116,139,0.3)" },
 };
 
 function StatusBadge({ status }: { status: string }) {
+  const s = statusStyles[status] ?? statusStyles.absent;
   return (
-    <span className={`px-2 py-0.5 rounded-full text-xs font-medium border ${statusMap[status] ?? statusMap.absent}`}>
+    <span className="px-2 py-0.5 rounded-full text-xs font-medium" style={s}>
       {status?.replace("_", " ").toUpperCase()}
+    </span>
+  );
+}
+
+function ConfidenceBadge({ score }: { score: number | null }) {
+  if (score === null) return <span className="text-xs" style={{ color: "var(--text-secondary)" }}>Manual</span>;
+  const pct = Math.round(score * 100);
+  const label = pct >= 90 ? "High" : pct >= 70 ? "Medium" : "Low";
+  const color = pct >= 90 ? "var(--status-present-text)" : pct >= 70 ? "var(--status-late-text)" : "var(--status-absent-text)";
+  return (
+    <span title={`Recognition confidence: ${pct}%`} className="text-xs font-medium cursor-default" style={{ color }}>
+      {label}
     </span>
   );
 }
@@ -228,10 +242,135 @@ function OverrideModal({ record, onClose, onSuccess }: OverrideModalProps) {
   );
 }
 
+const MONTH_NAMES = ["January","February","March","April","May","June","July","August","September","October","November","December"];
+
+function CalendarPicker({
+  selected, activity, today, onSelect, onClose, calMonth, setCalMonth,
+}: {
+  selected: string;
+  activity: Record<string, number>;
+  today: string;
+  onSelect: (date: string) => void;
+  onClose: () => void;
+  calMonth: { year: number; month: number };
+  setCalMonth: (v: { year: number; month: number }) => void;
+}) {
+  const ref = useRef<HTMLDivElement>(null);
+  const { year, month } = calMonth;
+
+  useEffect(() => {
+    function handleClick(e: MouseEvent) {
+      if (ref.current && !ref.current.contains(e.target as Node)) onClose();
+    }
+    document.addEventListener("mousedown", handleClick);
+    return () => document.removeEventListener("mousedown", handleClick);
+  }, [onClose]);
+
+  const firstDay = new Date(year, month, 1).getDay();
+  const daysInMonth = new Date(year, month + 1, 0).getDate();
+  const cells: (number | null)[] = [...Array(firstDay).fill(null)];
+  for (let d = 1; d <= daysInMonth; d++) cells.push(d);
+  while (cells.length % 7 !== 0) cells.push(null);
+
+  const isoForDay = (d: number) =>
+    `${year}-${String(month + 1).padStart(2, "0")}-${String(d).padStart(2, "0")}`;
+
+  const cellBg = (count: number) => {
+    if (count === 0) return "transparent";
+    if (count <= 3) return "#166534";
+    if (count <= 8) return "#16a34a";
+    if (count <= 15) return "#22c55e";
+    return "#4ade80";
+  };
+
+  const prevMonth = () => {
+    if (month === 0) setCalMonth({ year: year - 1, month: 11 });
+    else setCalMonth({ year, month: month - 1 });
+  };
+
+  const nextMonth = () => {
+    const isLastMonth = year === new Date(today + "T00:00:00").getFullYear() &&
+      month === new Date(today + "T00:00:00").getMonth();
+    if (isLastMonth) return;
+    if (month === 11) setCalMonth({ year: year + 1, month: 0 });
+    else setCalMonth({ year, month: month + 1 });
+  };
+
+  const todayMonth = new Date(today + "T00:00:00").getMonth();
+  const todayYear = new Date(today + "T00:00:00").getFullYear();
+  const isCurrentMonth = year === todayYear && month === todayMonth;
+
+  return (
+    <div ref={ref} className="absolute top-full left-0 mt-2 rounded-xl shadow-2xl z-50 p-4 w-72"
+      style={{ background: "var(--bg-card)", border: "1px solid var(--border)" }}>
+      <div className="flex items-center justify-between mb-3">
+        <button
+          onClick={prevMonth}
+          className="w-7 h-7 rounded-lg flex items-center justify-center text-lg transition-colors"
+          style={{ color: "var(--text-secondary)", background: "var(--bg-surface)" }}
+        >‹</button>
+        <span className="font-semibold text-sm" style={{ color: "var(--text-primary)" }}>
+          {MONTH_NAMES[month]} {year}
+        </span>
+        <button
+          onClick={nextMonth}
+          disabled={isCurrentMonth}
+          className="w-7 h-7 rounded-lg flex items-center justify-center text-lg transition-colors"
+          style={{
+            color: isCurrentMonth ? "var(--border)" : "var(--text-secondary)",
+            background: "var(--bg-surface)",
+            cursor: isCurrentMonth ? "not-allowed" : "pointer",
+          }}
+        >›</button>
+      </div>
+      <div className="grid grid-cols-7 mb-1">
+        {["Su","Mo","Tu","We","Th","Fr","Sa"].map((d) => (
+          <span key={d} className="text-center text-xs font-medium py-1" style={{ color: "var(--text-secondary)" }}>{d}</span>
+        ))}
+      </div>
+      <div className="grid grid-cols-7 gap-0.5">
+        {cells.map((day, i) => {
+          if (!day) return <div key={i} className="w-8 h-8" />;
+          const iso = isoForDay(day);
+          const isFuture = iso > today;
+          const isSelected = iso === selected;
+          const isToday = iso === today;
+          const count = activity[iso] ?? 0;
+          return (
+            <button
+              key={i}
+              disabled={isFuture}
+              onClick={() => { onSelect(iso); onClose(); }}
+              className="w-8 h-8 rounded-full flex items-center justify-center text-xs font-medium transition-all mx-auto"
+              style={{
+                background: isSelected ? "var(--accent)" : cellBg(count),
+                color: isSelected ? "#fff" : isFuture ? "var(--border)" : "var(--text-primary)",
+                outline: isToday && !isSelected ? "2px solid var(--accent)" : "none",
+                outlineOffset: "1px",
+                cursor: isFuture ? "not-allowed" : "pointer",
+                fontWeight: isToday ? 700 : undefined,
+              }}
+              title={`${iso}: ${count} record${count !== 1 ? "s" : ""}`}
+            >
+              {day}
+            </button>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
 export default function DashboardPage() {
   const [selectedDate, setSelectedDate] = useState(todayIso);
   const [records, setRecords] = useState<AttendanceRecord[]>([]);
   const [stats, setStats] = useState<Stats>({ total: 0, present: 0, late: 0, totalStudents: 0 });
+  const [activity, setActivity] = useState<Record<string, number>>({});
+  const [showCal, setShowCal] = useState(false);
+  const [calMonth, setCalMonth] = useState(() => {
+    const d = new Date();
+    return { year: d.getFullYear(), month: d.getMonth() };
+  });
   const [connected, setConnected] = useState(false);
   const [gatewayLive, setGatewayLive] = useState(false);
   const [gatewaySecondsAgo, setGatewaySecondsAgo] = useState<number | null>(null);
@@ -259,6 +398,14 @@ export default function DashboardPage() {
   useEffect(() => {
     fetchAttendanceForDate(selectedDate);
   }, [selectedDate, fetchAttendanceForDate]);
+
+  useEffect(() => {
+    const end = todayIso();
+    const startD = new Date(end + "T00:00:00");
+    startD.setDate(startD.getDate() - 83);
+    const start = `${startD.getFullYear()}-${String(startD.getMonth() + 1).padStart(2, "0")}-${String(startD.getDate()).padStart(2, "0")}`;
+    api.getAttendanceActivity(start, end).then(setActivity).catch(() => {});
+  }, []);
 
   useEffect(() => {
     fetchTotalStudents();
@@ -371,8 +518,8 @@ export default function DashboardPage() {
   ];
 
   return (
-    <div className="p-8 w-full">
-      <div className="mb-8 flex items-center justify-between">
+    <div className="p-4 md:p-8 w-full">
+      <div className="mb-8 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
         <div>
           {/* Date navigation */}
           <div className="flex items-center gap-2 mb-1">
@@ -385,9 +532,24 @@ export default function DashboardPage() {
             >
               ‹
             </button>
-            <h1 className="text-2xl font-semibold" style={{ color: "var(--text-primary)" }}>
-              {formatDateLabel(selectedDate)}
-            </h1>
+            <div className="relative">
+              <button onClick={() => setShowCal((v) => !v)} className="text-left">
+                <h1 className="text-2xl font-semibold hover:underline" style={{ color: "var(--text-primary)" }}>
+                  {formatDateLabel(selectedDate)}
+                </h1>
+              </button>
+              {showCal && (
+                <CalendarPicker
+                  selected={selectedDate}
+                  activity={activity}
+                  today={todayIso()}
+                  onSelect={setSelectedDate}
+                  onClose={() => setShowCal(false)}
+                  calMonth={calMonth}
+                  setCalMonth={setCalMonth}
+                />
+              )}
+            </div>
             <button
               onClick={() => setSelectedDate((d) => shiftDate(d, 1))}
               disabled={isToday}
@@ -433,7 +595,7 @@ export default function DashboardPage() {
         </div>
       </div>
 
-      <div className="grid grid-cols-4 gap-4 mb-8">
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
         {statCards.map((s) => (
           <div key={s.label} className="rounded-xl p-5" style={{ background: "var(--bg-card)", border: "1px solid var(--border)" }}>
             <div className={`text-3xl font-bold ${s.color}`} style={!s.color ? { color: "var(--text-primary)" } : undefined}>{s.value}</div>
@@ -456,7 +618,7 @@ export default function DashboardPage() {
       )}
 
       <div className="rounded-xl overflow-hidden" style={{ background: "var(--bg-card)", border: "1px solid var(--border)" }}>
-        <div className="px-6 py-4 flex items-center justify-between" style={{ borderBottom: "1px solid var(--border)" }}>
+        <div className="px-4 md:px-6 py-4 flex items-center justify-between" style={{ borderBottom: "1px solid var(--border)" }}>
           <span className="font-medium" style={{ color: "var(--text-primary)" }}>
             {isToday ? "Today's Attendance" : `Attendance - ${formatDateLabel(selectedDate)}`}
           </span>
@@ -479,7 +641,8 @@ export default function DashboardPage() {
             )}
           </div>
         </div>
-        <table className="w-full text-sm">
+        <div className="overflow-x-auto">
+        <table className="w-full min-w-[600px] text-sm">
           <thead>
             <tr style={{ borderBottom: "1px solid var(--border)", color: "var(--text-secondary)" }}>
               <th className="px-6 py-3 text-left font-medium">Student ID</th>
@@ -493,16 +656,24 @@ export default function DashboardPage() {
           <tbody>
             {records.length === 0 ? (
               <tr>
-                <td colSpan={6} className="px-6 py-12 text-center" style={{ color: "var(--text-secondary)" }}>
-                  No attendance records for this date.
+                <td colSpan={6} className="px-6 py-16 text-center">
+                  <svg className="w-10 h-10 mx-auto mb-3 opacity-30" fill="none" stroke="currentColor" viewBox="0 0 24 24" style={{ color: "var(--text-secondary)" }}>
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                  </svg>
+                  <p className="font-medium text-sm" style={{ color: "var(--text-primary)" }}>
+                    No attendance records for {formatDateLabel(selectedDate)}
+                  </p>
+                  <p className="text-xs mt-1" style={{ color: "var(--text-secondary)" }}>
+                    Students will appear here as they scan in at the gateway camera.
+                  </p>
                 </td>
               </tr>
             ) : (
               records.map((r, i) => (
                 <tr key={r.id ?? i} className="transition-colors"
-                  style={{ borderBottom: "1px solid var(--border)" }}
-                  onMouseEnter={(e) => (e.currentTarget.style.background = "#ffffff08")}
-                  onMouseLeave={(e) => (e.currentTarget.style.background = "transparent")}
+                  style={{ borderBottom: "1px solid var(--border)", background: i % 2 !== 0 ? "var(--bg-surface)" : "transparent" }}
+                  onMouseEnter={(e) => (e.currentTarget.style.background = "var(--bg-card)")}
+                  onMouseLeave={(e) => (e.currentTarget.style.background = i % 2 !== 0 ? "var(--bg-surface)" : "transparent")}
                 >
                   <td className="px-6 py-3 font-mono text-xs" style={{ color: "var(--text-secondary)" }}>{r.student_id}</td>
                   <td className="px-6 py-3 font-medium" style={{ color: "var(--text-primary)" }}>{r.student_name}</td>
@@ -510,9 +681,7 @@ export default function DashboardPage() {
                     {new Date(r.time_in).toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit" })}
                   </td>
                   <td className="px-6 py-3"><StatusBadge status={r.status} /></td>
-                  <td className="px-6 py-3" style={{ color: "var(--text-secondary)" }}>
-                    {r.confidence_score != null ? `${(r.confidence_score * 100).toFixed(0)}%` : "Manual"}
-                  </td>
+                  <td className="px-6 py-3"><ConfidenceBadge score={r.confidence_score} /></td>
                   <td className="px-6 py-3">
                     <button onClick={() => setOverrideRecord(r)}
                       className="text-xs px-2 py-1 rounded-md transition-all"
@@ -525,6 +694,7 @@ export default function DashboardPage() {
             )}
           </tbody>
         </table>
+        </div>
       </div>
 
       {showClearConfirm && (

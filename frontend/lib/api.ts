@@ -202,6 +202,8 @@ export const api = {
   getTodayAttendance: () => apiFetch<AttendanceRecord[]>("/api/attendance/today"),
   getAttendanceByDate: (date: string) =>
     apiFetch<AttendanceRecord[]>(`/api/attendance/by-date?date=${date}`),
+  getAttendanceActivity: (startDate: string, endDate: string) =>
+    apiFetch<Record<string, number>>(`/api/attendance/activity?start_date=${startDate}&end_date=${endDate}`),
   overrideAttendance: (data: { student_id: string; date: string; status: string; notes: string; time_in?: string }) =>
     apiFetch<{ message: string }>("/api/attendance/override", { method: "POST", body: JSON.stringify(data) }),
   getMyAttendance: (params: Record<string, string | number> = {}) =>

@@ -35,7 +35,7 @@ export default function SettingsPage() {
   }
 
   return (
-    <div className="p-8 w-full max-w-2xl">
+    <div className="p-4 md:p-8 w-full max-w-2xl">
       <div className="mb-8">
         <h1 className="text-2xl font-semibold" style={{ color: "var(--text-primary)" }}>Settings</h1>
         <p className="text-sm mt-1" style={{ color: "var(--text-secondary)" }}>
