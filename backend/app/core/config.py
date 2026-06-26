@@ -17,7 +17,7 @@ class Settings(BaseSettings):
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 60 * 24  # 24 hours
 
     # CORS
-    ALLOWED_ORIGINS: List[str] = ["http://localhost:3000"]
+    ALLOWED_ORIGINS: List[str] = ["http://localhost:3001"]
 
     # Face Recognition
     FACE_MATCH_THRESHOLD: float = 0.6  # Lower = stricter matching
@@ -30,6 +30,7 @@ class Settings(BaseSettings):
 
     class Config:
         env_file = ".env"
+        extra = "ignore"
 
     @field_validator("DATABASE_URL", mode="before")
     @classmethod

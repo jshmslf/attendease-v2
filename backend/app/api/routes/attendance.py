@@ -1,6 +1,6 @@
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, and_, desc, delete as sql_delete
+from sqlalchemy import select, and_, desc, delete as sql_delete, func, cast, Date
 from datetime import datetime
 from pydantic import BaseModel
 from typing import Optional
@@ -102,6 +102,27 @@ async def get_attendance_by_date(
         }
         for att, stu in rows
     ]
+
+
+@router.get("/activity")
+async def get_attendance_activity(
+    start_date: str = Query(..., description="YYYY-MM-DD"),
+    end_date: str = Query(..., description="YYYY-MM-DD"),
+    db: AsyncSession = Depends(get_db),
+    _: None = Depends(get_current_admin),
+):
+    """Return record counts grouped by date for the activity heatmap."""
+    start = datetime.strptime(start_date, "%Y-%m-%d")
+    end = datetime.strptime(end_date, "%Y-%m-%d").replace(hour=23, minute=59, second=59)
+    result = await db.execute(
+        select(
+            cast(Attendance.date, Date).label("day"),
+            func.count().label("count"),
+        )
+        .where(and_(Attendance.date >= start, Attendance.date <= end))
+        .group_by(cast(Attendance.date, Date))
+    )
+    return {str(row.day): row.count for row in result.all()}
 
 
 @router.get("/student/me")
