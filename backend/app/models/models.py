@@ -136,7 +136,15 @@ class Section(Base):
     __tablename__ = "sections"
 
     id = Column(String, primary_key=True, default=generate_uuid)
-    name = Column(String, unique=True, nullable=False) 
+    name = Column(String, unique=True, nullable=False)
+    created_at = Column(DateTime, default=ph_now)
+
+
+class Course(Base):
+    __tablename__ = "courses"
+
+    id = Column(String, primary_key=True, default=generate_uuid)
+    name = Column(String, unique=True, nullable=False)
     created_at = Column(DateTime, default=ph_now)
 
 

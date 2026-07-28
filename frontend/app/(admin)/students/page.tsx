@@ -5,7 +5,6 @@ import { useRouter } from "next/navigation";
 import { api, StudentResponse, ParentInfo, Subject, Section } from "@/lib/api";
 
 interface StudentForm {
-  student_id: string;
   first_name: string;
   last_name: string;
   email: string;
@@ -102,6 +101,8 @@ function EditStudentModal({ student, onClose, onSuccess }: EditStudentModalProps
 
   // Sections (for Student Info tab)
   const [sections, setSections] = useState<Section[]>([]);
+  const [courses, setCourses] = useState<string[]>([]);
+  const [isNewCourse, setIsNewCourse] = useState(false);
 
   // Direct fetch helper - bypasses the webpack-cached api module
   const BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
@@ -127,6 +128,7 @@ function EditStudentModal({ student, onClose, onSuccess }: EditStudentModalProps
     loadPortalAccount();
     loadSubjectsData();
     api.getSections().then(setSections).catch(() => {});
+    api.getCourses().then(setCourses).catch(() => {});
   }, []);
 
   async function loadSubjectsData() {
@@ -241,6 +243,9 @@ function EditStudentModal({ student, onClose, onSuccess }: EditStudentModalProps
     setStudentError("");
     setStudentSuccess("");
     try {
+      if (isNewCourse && studentForm.course && !courses.includes(studentForm.course)) {
+        await api.createCourse(studentForm.course).catch(() => {});
+      }
       const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
       const token = typeof window !== "undefined" ? localStorage.getItem("admin_token") : null;
       const res = await fetch(`${API_URL}/api/students/${student.student_id}`, {
@@ -363,13 +368,13 @@ function EditStudentModal({ student, onClose, onSuccess }: EditStudentModalProps
             <div className="grid grid-cols-2 gap-3">
               <div>
                 <label className="block text-xs font-medium mb-1" style={{ color: "var(--text-secondary)" }}>First Name</label>
-                <input type="text" required value={studentForm.first_name}
+                <input type="text" required maxLength={100} value={studentForm.first_name}
                   onChange={(e) => setStudentForm({ ...studentForm, first_name: e.target.value })}
                   className="w-full px-3 py-2 rounded-lg text-sm" style={inputStyle} />
               </div>
               <div>
                 <label className="block text-xs font-medium mb-1" style={{ color: "var(--text-secondary)" }}>Last Name</label>
-                <input type="text" required value={studentForm.last_name}
+                <input type="text" required maxLength={100} value={studentForm.last_name}
                   onChange={(e) => setStudentForm({ ...studentForm, last_name: e.target.value })}
                   className="w-full px-3 py-2 rounded-lg text-sm" style={inputStyle} />
               </div>
@@ -383,9 +388,30 @@ function EditStudentModal({ student, onClose, onSuccess }: EditStudentModalProps
             <div className="grid grid-cols-2 gap-3">
               <div>
                 <label className="block text-xs font-medium mb-1" style={{ color: "var(--text-secondary)" }}>Course</label>
-                <input type="text" required value={studentForm.course}
-                  onChange={(e) => setStudentForm({ ...studentForm, course: e.target.value })}
-                  className="w-full px-3 py-2 rounded-lg text-sm" style={inputStyle} />
+                {isNewCourse || courses.length === 0 ? (
+                  <input type="text" required value={studentForm.course}
+                    placeholder="BS Computer Science"
+                    onChange={(e) => setStudentForm({ ...studentForm, course: e.target.value })}
+                    className="w-full px-3 py-2 rounded-lg text-sm" style={inputStyle} />
+                ) : (
+                  <select
+                    value={studentForm.course}
+                    onChange={(e) => {
+                      if (e.target.value === "__new__") {
+                        setIsNewCourse(true);
+                        setStudentForm({ ...studentForm, course: "" });
+                      } else {
+                        setStudentForm({ ...studentForm, course: e.target.value });
+                      }
+                    }}
+                    className="w-full px-3 py-2 rounded-lg text-sm" style={inputStyle}>
+                    {!courses.includes(studentForm.course) && (
+                      <option value={studentForm.course}>{studentForm.course}</option>
+                    )}
+                    {courses.map((c) => <option key={c} value={c}>{c}</option>)}
+                    <option value="__new__">+ Add new course</option>
+                  </select>
+                )}
               </div>
               <div>
                 <label className="block text-xs font-medium mb-1" style={{ color: "var(--text-secondary)" }}>Year Level</label>
@@ -683,7 +709,10 @@ function EditStudentModal({ student, onClose, onSuccess }: EditStudentModalProps
                   <div>
                     <label className="block text-xs font-medium mb-1" style={{ color: "var(--text-secondary)" }}>Phone Number</label>
                     <input type="text" required value={parentForm.phone_number} placeholder="+639XXXXXXXXX"
-                      onChange={(e) => setParentForm({ ...parentForm, phone_number: e.target.value })}
+                      onChange={(e) => {
+                        const digits = e.target.value.replace(/^\+63/, "").replace(/\D/g, "").slice(0, 10);
+                        setParentForm({ ...parentForm, phone_number: "+63" + digits });
+                      }}
                       className="w-full px-3 py-2 rounded-lg text-sm" style={inputStyle} />
                     <p className="text-xs mt-1" style={{ color: "var(--text-secondary)" }}>Format: +639XXXXXXXXX</p>
                   </div>
@@ -757,13 +786,21 @@ function EditStudentModal({ student, onClose, onSuccess }: EditStudentModalProps
 function AddStudentModal({ onClose, onSuccess }: AddStudentModalProps) {
   const [step, setStep] = useState(1);
   const [studentData, setStudentData] = useState<StudentForm>({
-    student_id: "", first_name: "", last_name: "",
+    first_name: "", last_name: "",
     email: "", course: "", year_level: 1, section_id: "",
   });
   const [sections, setSections] = useState<Section[]>([]);
+  const [courses, setCourses] = useState<string[]>([]);
+  const [isNewCourse, setIsNewCourse] = useState(false);
+  const [nextStudentId, setNextStudentId] = useState("");
 
   useEffect(() => {
     api.getSections().then(setSections).catch(() => {});
+    api.getCourses().then((list) => {
+      setCourses(list);
+      if (list.length === 0) setIsNewCourse(true);
+    }).catch(() => {});
+    api.getNextStudentId().then((r) => setNextStudentId(r.student_id)).catch(() => {});
   }, []);
   const [parentData, setParentData] = useState<ParentForm>({
     name: "", phone_number: "+63", relationship_to_student: "Parent",
@@ -778,6 +815,9 @@ function AddStudentModal({ onClose, onSuccess }: AddStudentModalProps) {
     setLoading(true);
     setError("");
     try {
+      if (isNewCourse && studentData.course && !courses.includes(studentData.course)) {
+        await api.createCourse(studentData.course).catch(() => {});
+      }
       const student = await api.createStudent({
         ...studentData,
         year_level: Number(studentData.year_level),
@@ -859,10 +899,8 @@ function AddStudentModal({ onClose, onSuccess }: AddStudentModalProps) {
             <div className="grid grid-cols-2 gap-3">
               <div>
                 <label className="block text-xs font-medium mb-1" style={{ color: "var(--text-secondary)" }}>Student ID</label>
-                <input type="text" placeholder="2024-00001" required
-                  value={studentData.student_id}
-                  onChange={(e) => setStudentData({ ...studentData, student_id: e.target.value })}
-                  className="w-full px-3 py-2 rounded-lg text-sm" style={inputStyle} />
+                <input type="text" readOnly disabled value={nextStudentId || "Generating..."}
+                  className="w-full px-3 py-2 rounded-lg text-sm opacity-70 cursor-not-allowed" style={inputStyle} />
               </div>
               <div>
                 <label className="block text-xs font-medium mb-1" style={{ color: "var(--text-secondary)" }}>Email</label>
@@ -873,24 +911,42 @@ function AddStudentModal({ onClose, onSuccess }: AddStudentModalProps) {
               </div>
               <div>
                 <label className="block text-xs font-medium mb-1" style={{ color: "var(--text-secondary)" }}>First Name</label>
-                <input type="text" placeholder="Juan" required
+                <input type="text" placeholder="Juan" required maxLength={100}
                   value={studentData.first_name}
                   onChange={(e) => setStudentData({ ...studentData, first_name: e.target.value })}
                   className="w-full px-3 py-2 rounded-lg text-sm" style={inputStyle} />
               </div>
               <div>
                 <label className="block text-xs font-medium mb-1" style={{ color: "var(--text-secondary)" }}>Last Name</label>
-                <input type="text" placeholder="Dela Cruz" required
+                <input type="text" placeholder="Dela Cruz" required maxLength={100}
                   value={studentData.last_name}
                   onChange={(e) => setStudentData({ ...studentData, last_name: e.target.value })}
                   className="w-full px-3 py-2 rounded-lg text-sm" style={inputStyle} />
               </div>
               <div>
                 <label className="block text-xs font-medium mb-1" style={{ color: "var(--text-secondary)" }}>Course</label>
-                <input type="text" placeholder="BS Computer Science" required
-                  value={studentData.course}
-                  onChange={(e) => setStudentData({ ...studentData, course: e.target.value })}
-                  className="w-full px-3 py-2 rounded-lg text-sm" style={inputStyle} />
+                {isNewCourse ? (
+                  <input type="text" placeholder="BS Computer Science" required
+                    value={studentData.course}
+                    onChange={(e) => setStudentData({ ...studentData, course: e.target.value })}
+                    className="w-full px-3 py-2 rounded-lg text-sm" style={inputStyle} />
+                ) : (
+                  <select required
+                    value={studentData.course}
+                    onChange={(e) => {
+                      if (e.target.value === "__new__") {
+                        setIsNewCourse(true);
+                        setStudentData({ ...studentData, course: "" });
+                      } else {
+                        setStudentData({ ...studentData, course: e.target.value });
+                      }
+                    }}
+                    className="w-full px-3 py-2 rounded-lg text-sm" style={inputStyle}>
+                    <option value="">Select course</option>
+                    {courses.map((c) => <option key={c} value={c}>{c}</option>)}
+                    <option value="__new__">+ Add new course</option>
+                  </select>
+                )}
               </div>
               <div>
                 <label className="block text-xs font-medium mb-1" style={{ color: "var(--text-secondary)" }}>Year Level</label>
@@ -939,7 +995,10 @@ function AddStudentModal({ onClose, onSuccess }: AddStudentModalProps) {
               <label className="block text-xs font-medium mb-1" style={{ color: "var(--text-secondary)" }}>Phone Number (E.164)</label>
               <input type="text" placeholder="+639XXXXXXXXX" required
                 value={parentData.phone_number}
-                onChange={(e) => setParentData({ ...parentData, phone_number: e.target.value })}
+                onChange={(e) => {
+                  const digits = e.target.value.replace(/^\+63/, "").replace(/\D/g, "").slice(0, 10);
+                  setParentData({ ...parentData, phone_number: "+63" + digits });
+                }}
                 className="w-full px-3 py-2 rounded-lg text-sm" style={inputStyle} />
               <p className="text-xs mt-1" style={{ color: "var(--text-secondary)" }}>Format: +639XXXXXXXXX</p>
             </div>

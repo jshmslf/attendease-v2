@@ -46,6 +46,16 @@ const navItems: NavItem[] = [
     ),
   },
   {
+    href: "/courses",
+    label: "Courses",
+    icon: (
+      <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
+          d="M12 14l9-5-9-5-9 5 9 5zm0 0l6.16-3.422A12.083 12.083 0 0121 12.5c0 2.62-1.343 4.877-3.375 6.196A12.083 12.083 0 0112 21a12.083 12.083 0 01-5.625-2.304A6.978 6.978 0 013 12.5c0-.94.223-1.827.618-2.614M12 14L5.84 10.578" />
+      </svg>
+    ),
+  },
+  {
     href: "/sections",
     label: "Sections",
     icon: (

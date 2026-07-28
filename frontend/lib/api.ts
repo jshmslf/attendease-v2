@@ -110,6 +110,12 @@ export interface Section {
   created_at: string;
 }
 
+export interface Course {
+  id: string;
+  name: string;
+  created_at: string;
+}
+
 export interface AppSettings {
   school_name: string;
 }
@@ -155,8 +161,10 @@ export const api = {
   // Students
   getStudents: () => apiFetch<StudentResponse[]>("/api/students/"),
   getStudent: (id: string) => apiFetch<StudentResponse>(`/api/students/${id}`),
-  createStudent: (data: Omit<StudentResponse, "id" | "has_face_enrolled" | "is_active">) =>
+  createStudent: (data: Omit<StudentResponse, "id" | "student_id" | "has_face_enrolled" | "is_active">) =>
     apiFetch<StudentResponse>("/api/students/", { method: "POST", body: JSON.stringify(data) }),
+  getCourses: () => apiFetch<string[]>("/api/students/meta/courses"),
+  getNextStudentId: () => apiFetch<{ student_id: string }>("/api/students/meta/next-id"),
   updateStudent: (studentId: string, data: StudentUpdateData) =>
     apiFetch<StudentResponse>(`/api/students/${studentId}`, { method: "PUT", body: JSON.stringify(data) }),
   addParent: (studentId: string, data: { name: string; phone_number: string; relationship_to_student: string }) =>
@@ -256,6 +264,16 @@ export const api = {
     apiFetch<Section>(`/api/sections/${id}`, { method: "PUT", body: JSON.stringify({ name }) }),
   deleteSection: (id: string) =>
     apiFetch<void>(`/api/sections/${id}`, { method: "DELETE" }),
+
+  // Courses (canonical list, backs the students-page dropdown)
+  getCoursesList: () =>
+    apiFetch<Course[]>("/api/courses/"),
+  createCourse: (name: string) =>
+    apiFetch<Course>("/api/courses/", { method: "POST", body: JSON.stringify({ name }) }),
+  updateCourse: (id: string, name: string) =>
+    apiFetch<Course>(`/api/courses/${id}`, { method: "PUT", body: JSON.stringify({ name }) }),
+  deleteCourse: (id: string) =>
+    apiFetch<void>(`/api/courses/${id}`, { method: "DELETE" }),
 
   // Settings
   getSettings: () => apiFetch<AppSettings>("/api/settings/"),

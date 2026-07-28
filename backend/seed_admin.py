@@ -49,4 +49,23 @@ async def main():
         print("-" * 30)
 
 
-asyncio.run(main())
+async def create_school_admin():
+    async with AsyncSessionLocal() as db:
+        admin = AdminAccount(
+            id=str(uuid.uuid4()),
+            username="school_admin",
+            email="school_admin@attendease.edu",
+            hashed_password=hash_password("123admin456"),
+            full_name="School Admin",
+            role="superadmin",
+        )
+        db.add(admin)
+        await db.commit()
+        print("Done!")
+        print("-" * 30)
+        print("Username: school_admin")
+        print("Password: 123admin456")
+        print("-" * 30)
+
+
+asyncio.run(create_school_admin())

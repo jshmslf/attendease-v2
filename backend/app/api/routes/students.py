@@ -1,14 +1,16 @@
 import os
+import re
 import logging
 from fastapi import APIRouter, Depends, HTTPException, UploadFile, File
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 from sqlalchemy.orm import selectinload
-from pydantic import BaseModel
+from pydantic import BaseModel, Field, field_validator
 from typing import Optional
 
 from app.db.session import get_db
-from app.models.models import Student, Parent, PortalAccount, Section
+from app.models.models import Student, Parent, PortalAccount, Section, Course
 from app.services.face_service import (
     extract_encoding_from_image,
     encode_face_array,
@@ -17,6 +19,10 @@ from app.services.face_service import (
 )
 from app.core.security import get_current_admin, get_current_student, hash_password
 from app.core.config import settings
+from app.core.timezone import ph_now
+
+EMAIL_RE = re.compile(r"^[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}$")
+PH_PHONE_RE = re.compile(r"^\+63\d{10}$")
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
@@ -31,22 +37,57 @@ def student_dict(s: Student) -> dict:
 
 
 class StudentCreate(BaseModel):
-    student_id: str
-    first_name: str
-    last_name: str
+    first_name: str = Field(max_length=100)
+    last_name: str = Field(max_length=100)
     email: str
     course: str
     year_level: int
     section_id: Optional[str] = None
 
+    @field_validator("first_name", "last_name", "course")
+    @classmethod
+    def strip_and_require(cls, v):
+        v = v.strip()
+        if not v:
+            raise ValueError("This field cannot be empty.")
+        return v
+
+    @field_validator("email")
+    @classmethod
+    def validate_email(cls, v):
+        v = v.strip().lower()
+        if not EMAIL_RE.match(v):
+            raise ValueError("Invalid email address.")
+        return v
+
 
 class StudentUpdate(BaseModel):
-    first_name: Optional[str] = None
-    last_name: Optional[str] = None
+    first_name: Optional[str] = Field(default=None, max_length=100)
+    last_name: Optional[str] = Field(default=None, max_length=100)
     email: Optional[str] = None
     course: Optional[str] = None
     year_level: Optional[int] = None
     section_id: Optional[str] = None
+
+    @field_validator("first_name", "last_name", "course")
+    @classmethod
+    def strip_and_require(cls, v):
+        if v is None:
+            return v
+        v = v.strip()
+        if not v:
+            raise ValueError("This field cannot be empty.")
+        return v
+
+    @field_validator("email")
+    @classmethod
+    def validate_email(cls, v):
+        if v is None:
+            return v
+        v = v.strip().lower()
+        if not EMAIL_RE.match(v):
+            raise ValueError("Invalid email address.")
+        return v
 
 
 class StudentSelfUpdate(BaseModel):
@@ -60,11 +101,29 @@ class ParentCreate(BaseModel):
     phone_number: str
     relationship_to_student: str = "Parent"
 
+    @field_validator("phone_number")
+    @classmethod
+    def validate_phone(cls, v):
+        v = v.strip()
+        if not PH_PHONE_RE.match(v):
+            raise ValueError("Phone number must be in the format +63 followed by 10 digits.")
+        return v
+
 
 class ParentUpdate(BaseModel):
     name: Optional[str] = None
     phone_number: Optional[str] = None
     relationship_to_student: Optional[str] = None
+
+    @field_validator("phone_number")
+    @classmethod
+    def validate_phone(cls, v):
+        if v is None:
+            return v
+        v = v.strip()
+        if not PH_PHONE_RE.match(v):
+            raise ValueError("Phone number must be in the format +63 followed by 10 digits.")
+        return v
 
 
 class PortalAccountCreate(BaseModel):
@@ -147,6 +206,40 @@ async def get_my_parents(
 
 # ── Admin endpoints ──────────────────────────────────────────────────────────
 
+async def generate_student_id(db: AsyncSession) -> str:
+    """Generate the next sequential student ID for the current year, e.g. '2026-00001'."""
+    year = ph_now().year
+    prefix = f"{year}-"
+    result = await db.execute(
+        select(Student.student_id)
+        .where(Student.student_id.like(f"{prefix}%"))
+        .order_by(Student.student_id.desc())
+        .limit(1)
+    )
+    last = result.scalar_one_or_none()
+    seq = int(last.split("-")[1]) + 1 if last else 1
+    return f"{prefix}{seq:05d}"
+
+
+@router.get("/meta/courses", response_model=list[str])
+async def list_courses(
+    db: AsyncSession = Depends(get_db),
+    _: None = Depends(get_current_admin),
+):
+    """List canonical course names from the courses table (admin only)."""
+    result = await db.execute(select(Course.name).order_by(Course.name))
+    return list(result.scalars().all())
+
+
+@router.get("/meta/next-id", response_model=dict)
+async def preview_next_student_id(
+    db: AsyncSession = Depends(get_db),
+    _: None = Depends(get_current_admin),
+):
+    """Preview the student ID that will be assigned to the next registered student."""
+    return {"student_id": await generate_student_id(db)}
+
+
 @router.post("/", response_model=StudentResponse)
 async def create_student(
     data: StudentCreate,
@@ -154,20 +247,28 @@ async def create_student(
     _: None = Depends(get_current_admin),
 ):
     """Register a new student (admin only)."""
-    existing = await db.execute(
-        select(Student).where(Student.student_id == data.student_id)
+    existing_email = await db.execute(
+        select(Student).where(Student.email == data.email)
     )
-    if existing.scalar_one_or_none():
-        raise HTTPException(status_code=400, detail="Student ID already exists.")
+    if existing_email.scalar_one_or_none():
+        raise HTTPException(status_code=400, detail="Email already registered.")
 
     if data.section_id:
         section = await db.execute(select(Section).where(Section.id == data.section_id))
         if not section.scalar_one_or_none():
             raise HTTPException(status_code=400, detail="Section not found.")
 
-    student = Student(**data.model_dump())
-    db.add(student)
-    await db.commit()
+    for attempt in range(3):
+        student_id = await generate_student_id(db)
+        student = Student(student_id=student_id, **data.model_dump())
+        db.add(student)
+        try:
+            await db.commit()
+            break
+        except IntegrityError:
+            await db.rollback()
+            if attempt == 2:
+                raise HTTPException(status_code=500, detail="Could not generate a unique student ID. Please try again.")
     result = await db.execute(
         select(Student).options(selectinload(Student.section)).where(Student.id == student.id)
     )
@@ -496,6 +597,13 @@ async def update_student(
     student = result.scalar_one_or_none()
     if not student:
         raise HTTPException(status_code=404, detail="Student not found.")
+
+    if data.email and data.email != student.email:
+        existing_email = await db.execute(
+            select(Student).where(Student.email == data.email, Student.id != student.id)
+        )
+        if existing_email.scalar_one_or_none():
+            raise HTTPException(status_code=400, detail="Email already registered.")
 
     for field, value in data.model_dump(exclude_none=True).items():
         setattr(student, field, value)

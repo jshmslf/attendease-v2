@@ -7,7 +7,7 @@ from contextlib import asynccontextmanager
 from app.core.config import settings
 from app.db.session import engine, Base
 from app.db import base  # noqa: F401 - imports all models for SQLAlchemy
-from app.api.routes import auth, students, attendance, camera, notifications, messages, subjects, sections
+from app.api.routes import auth, students, attendance, camera, notifications, messages, subjects, sections, courses
 from app.api.routes import settings as settings_router
 
 
@@ -51,6 +51,7 @@ app.include_router(notifications.router, prefix="/api/notifications", tags=["not
 app.include_router(messages.router, prefix="/api/messages", tags=["messages"])
 app.include_router(subjects.router, prefix="/api/subjects", tags=["subjects"])
 app.include_router(sections.router, prefix="/api/sections", tags=["sections"])
+app.include_router(courses.router, prefix="/api/courses", tags=["courses"])
 app.include_router(settings_router.router, prefix="/api/settings", tags=["settings"])
 
 
